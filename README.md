@@ -49,6 +49,9 @@ Package name and SHA-256 fingerprint of the signing certificate, for example for
 
 </details>
 
+LSPatch Games/Identity integration and the assisted-sign-in layout fix are described
+in [LSPATCH_COMPAT.md](LSPATCH_COMPAT.md).
+
 ## Translations
 
 If you'd like to help translate MicroG please see [here](https://morphe.software/translate).

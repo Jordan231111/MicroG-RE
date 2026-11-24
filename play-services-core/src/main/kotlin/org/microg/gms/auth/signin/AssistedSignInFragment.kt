@@ -112,7 +112,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
     private fun addGoogleAccount() {
         notifyCancelBtn(true)
         container?.removeAllViews()
-        val chooseView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_hint_login, null)
+        val chooseView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_hint_login, container, false)
         val addAccountBtn = chooseView.findViewById<TextView>(R.id.add_google_account_btn)
         val clientAppLabel = requireContext().packageManager.getApplicationLabel(clientPackageName)
         chooseView.findViewById<TextView>(R.id.add_account_subtitle_tv).text = String.format(
@@ -163,7 +163,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
         lifecycleScope.launch {
             notifyCancelBtn(true)
             container?.removeAllViews()
-            val chooseView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_choose_layout, null)
+            val chooseView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_choose_layout, container, false)
             val clientAppLabel = requireContext().packageManager.getApplicationLabel(clientPackageName)
             chooseView.findViewById<TextView>(R.id.sign_multi_description).text =
                 String.format(getString(R.string.credentials_assisted_choose_account_subtitle), clientAppLabel)
@@ -171,7 +171,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
             val progress = chooseView.findViewById<ProgressBar>(R.id.sign_multi_progress)
             authorizedAccounts.forEachIndexed { index, pair ->
                 val accountName = pair.first
-                val accountView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_multi_layout, null)
+                val accountView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_multi_layout, accountViews, false)
                 accountView.findViewById<TextView>(R.id.account_email).text = accountName
                 withContext(Dispatchers.IO) {
                     PeopleManager.getDisplayName(requireContext(), accountName)
@@ -208,7 +208,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
             notifyCancelBtn(false)
             container?.removeAllViews()
             val loadingView =
-                LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_loading_layout, null)
+                LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_loading_layout, container, false)
             loadingView.findViewById<TextView>(R.id.sign_account_email).text = accountName
             withContext(Dispatchers.IO) {
                 PeopleManager.getDisplayName(requireContext(), accountName)
@@ -233,7 +233,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
             notifyCancelBtn(visible = true, backToMulti = authStatusList.size > 1)
             container?.removeAllViews()
             val reloadView =
-                LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_back_consent_layout, null)
+                LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_back_consent_layout, container, false)
             reloadView.findViewById<TextView>(R.id.sign_account_email).text = accountName
             withContext(Dispatchers.IO) {
                 PeopleManager.getDisplayName(requireContext(), accountName)
@@ -295,6 +295,13 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
         Log.d(TAG, "onViewCreated")
         cancelBtn = view.findViewById(R.id.cancel)
         container = view.findViewById(R.id.google_sign_in_container)
+        // Account data arrives after the initial sheet animation. Recompute its target
+        // when content height changes instead of settling at the old loading height.
+        container?.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) {
+                (dialog as? BottomSheetDialog)?.behavior?.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
