@@ -8,8 +8,10 @@ package org.microg.gms.games
 import android.accounts.Account
 import android.accounts.AccountManager
 import android.app.PendingIntent
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
@@ -57,6 +59,11 @@ import org.microg.gms.common.Constants
 import org.microg.gms.common.GmsService
 import org.microg.gms.common.PackageUtils
 import org.microg.gms.games.achievements.AchievementsApiClient
+import org.microg.gms.games.achievements.AchievementDefinition
+import org.microg.gms.games.achievements.PlayerAchievement
+import org.microg.gms.games.achievements.getAchievementState
+import org.microg.gms.games.leaderboards.LeaderboardsApiClient
+import org.microg.gms.games.leaderboards.SubmitLeaderboardScoreResponse
 import org.microg.gms.games.snapshot.SnapshotsDataClient
 import org.microg.gms.games.utils.AccountPromptManager
 import org.microg.gms.utils.warnOnTransactionIssues
@@ -162,6 +169,16 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
     private val pattern: Pattern = Pattern.compile("[0-9a-zA-Z-._~]{1,100}")
     private var saveName: String? = null
 
+    private suspend fun gamesToken(): String = withContext(Dispatchers.IO) {
+        AuthManager(context, account.name, packageName, SERVICE_GAMES_LITE)
+            .apply { isPermitted = true }.requestAuth(true).auth
+    } ?: throw IllegalStateException("Games authorization unavailable")
+
+    private fun gameAppId(): String? = runCatching {
+        context.packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+            .metaData?.getString("com.google.android.gms.games.APP_ID")
+    }.getOrNull()
+
     override fun clientDisconnecting(clientId: Long) {
         Log.d(TAG, "Not yet implemented: clientDisconnecting($clientId)")
     }
@@ -175,8 +192,7 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
     }
 
     override fun getAppId(): String? {
-        Log.d(TAG, "Not yet implemented: getAppId")
-        return null
+        return gameAppId()
     }
 
     override fun getConnectionHint(): Bundle? {
@@ -235,7 +251,48 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
     }
 
     override fun submitScore(callbacks: IGamesCallbacks?, leaderboardId: String?, score: Long) {
-        Log.d(TAG, "Not yet implemented: submitScore($leaderboardId, $score)")
+        submitScoreInternal(callbacks, leaderboardId, score, null)
+    }
+
+    private fun submitScoreInternal(callbacks: IGamesCallbacks?, leaderboardId: String?, score: Long, scoreTag: String?) {
+        lifecycleScope.launchWhenStarted {
+            val result = runCatching {
+                require(!leaderboardId.isNullOrBlank()) { "Missing leaderboard ID" }
+                LeaderboardsApiClient.submitLeaderboardScores(context, gamesToken(), leaderboardId, score.toString(), scoreTag)
+            }
+            result.onFailure { Log.w(TAG, "Could not submit leaderboard score", it) }
+            callbacks?.onScoreSubmitted(scoreSubmissionData(
+                leaderboardId.orEmpty(), score, scoreTag,
+                result.getOrNull(),
+                if (result.isSuccess) GamesStatusCodes.OK.code else GamesStatusCodes.NETWORK_ERROR_OPERATION_FAILED.code
+            ))
+        }
+    }
+
+    private fun scoreSubmissionData(
+        leaderboardId: String, score: Long, scoreTag: String?,
+        response: SubmitLeaderboardScoreResponse?, statusCode: Int
+    ): DataHolder {
+        // Play Games SDK 21.0.0 constructs ScoreSubmissionData from exactly
+        // three rows, indexed daily (0), weekly (1), then all-time (2).
+        val columns = arrayOf("leaderboardId", "playerId", "timeSpan", "hasResult", "rawScore", "formattedScore", "newBest", "scoreTag")
+        val builder = DataHolder.builder(columns)
+        for ((index, span) in listOf("DAILY", "WEEKLY", "ALL_TIME").withIndex()) {
+            val newBest = response?.beatenScoreTimeSpans?.any { it.equals(span, ignoreCase = true) } == true
+            val previousBest = response?.unbeatenScores?.firstOrNull { it.timeSpan?.equals(span, ignoreCase = true) == true }
+            val hasResult = newBest || previousBest != null
+            builder.withRow(ContentValues().apply {
+                put("leaderboardId", leaderboardId)
+                put("playerId", player.playerId)
+                put("timeSpan", index)
+                put("hasResult", hasResult)
+                put("rawScore", if (newBest) score else previousBest?.score?.toLongOrNull() ?: 0L)
+                put("formattedScore", if (newBest) response?.formattedScore ?: score.toString() else previousBest?.formattedScore)
+                put("newBest", newBest)
+                put("scoreTag", if (newBest) response?.scoreTag ?: scoreTag else previousBest?.scoreTag)
+            })
+        }
+        return builder.build(statusCode)
     }
 
     override fun loadLeaderboards(callbacks: IGamesCallbacks?) {
@@ -563,12 +620,64 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
     }
 
     override fun loadAchievementsV2(callbacks: IGamesCallbacks?, forceReload: Boolean) {
-        Log.d(TAG, "Not yet implemented: loadAchievementsV2($forceReload)")
-        callbacks?.onAchievementsLoaded(DataHolder.empty(CommonStatusCodes.SUCCESS))
+        lifecycleScope.launchWhenStarted {
+            runCatching {
+                val token = gamesToken()
+                val progress = mutableMapOf<String, PlayerAchievement>()
+                var pageToken: String? = null
+                do {
+                    val response = AchievementsApiClient.requestPlayerAllAchievements(context, token, pageToken)
+                    response.items.forEach { item -> item.id?.let { progress[it] = item } }
+                    pageToken = response.nextPageToken?.takeIf { it.isNotBlank() }
+                } while (pageToken != null)
+
+                val definitions = mutableListOf<AchievementDefinition>()
+                pageToken = null
+                do {
+                    val response = AchievementsApiClient.requestGameAllAchievements(context, token, pageToken)
+                    definitions.addAll(response.items)
+                    pageToken = response.nextPageToken?.takeIf { it.isNotBlank() }
+                } while (pageToken != null)
+
+                val achievementColumns = listOf(
+                    "external_achievement_id", "external_game_id", "type", "name", "description",
+                    "definition_xp_value", "state", "last_updated_timestamp", "current_steps", "total_steps",
+                    "formatted_current_steps", "formatted_total_steps", "revealed_icon_image_uri",
+                    "revealed_icon_image_url", "unlocked_icon_image_uri", "unlocked_icon_image_url"
+                )
+                val columns = (achievementColumns + PlayerColumns.CURRENT_PLAYER_COLUMNS).distinct().toTypedArray()
+                val builder = DataHolder.builder(columns)
+                for (definition in definitions) {
+                    val state = progress[definition.id]
+                    val row = if (player is PlayerEntity) player.toContentValues() else ContentValues()
+                    row.put("external_achievement_id", definition.id)
+                    row.put("external_game_id", gameAppId())
+                    row.put("type", definition.achievementType)
+                    row.put("name", definition.name)
+                    row.put("description", definition.description)
+                    row.put("definition_xp_value", definition.experiencePoints.toLongOrNull() ?: 0L)
+                    row.put("state", state?.let { getAchievementState(it.achievementState) } ?: definition.initialState)
+                    row.put("last_updated_timestamp", state?.lastUpdatedTimestamp?.toLongOrNull() ?: 0L)
+                    row.put("current_steps", state?.currentSteps ?: 0)
+                    row.put("total_steps", definition.totalSteps)
+                    row.put("formatted_current_steps", state?.formattedCurrentStepsString)
+                    row.put("formatted_total_steps", definition.formattedTotalSteps)
+                    row.put("revealed_icon_image_uri", definition.revealedIconUrl)
+                    row.put("revealed_icon_image_url", definition.revealedIconUrl)
+                    row.put("unlocked_icon_image_uri", definition.unlockedIconUrl)
+                    row.put("unlocked_icon_image_url", definition.unlockedIconUrl)
+                    builder.withRow(row)
+                }
+                callbacks?.onAchievementsLoaded(builder.build(CommonStatusCodes.SUCCESS))
+            }.onFailure {
+                Log.w(TAG, "Could not load achievements", it)
+                callbacks?.onAchievementsLoaded(DataHolder.empty(GamesStatusCodes.NETWORK_ERROR_OPERATION_FAILED.code))
+            }
+        }
     }
 
     override fun submitLeaderboardScore(callbacks: IGamesCallbacks?, leaderboardId: String?, score: Long, scoreTag: String?) {
-        Log.d(TAG, "Not yet implemented: submitLeaderboardScore($leaderboardId, $score, $scoreTag)")
+        submitScoreInternal(callbacks, leaderboardId, score, scoreTag)
     }
 
     override fun setAchievementSteps(callbacks: IGamesCallbacks?, achievementId: String, numSteps: Int, windowToken: IBinder?, extras: Bundle?) {

@@ -9,7 +9,6 @@ import android.content.Context
 import com.android.volley.Request
 import org.microg.gms.games.requestGamesInfo
 import java.util.Locale
-import java.util.UUID
 
 /**
  * https://developers.google.com/games/services/web/api/rest#rest-resource:-leaderboards
@@ -96,7 +95,7 @@ object LeaderboardsApiClient {
     /**
      * Submits a score to the specified leaderboard.
      */
-    suspend fun submitLeaderboardScores(mContext: Context, oauthToken: String, leaderboardId: String, score: String) = requestGamesInfo(
+    suspend fun submitLeaderboardScores(mContext: Context, oauthToken: String, leaderboardId: String, score: String, scoreTag: String? = null) = requestGamesInfo(
         mContext,
         Request.Method.POST,
         oauthToken,
@@ -104,7 +103,7 @@ object LeaderboardsApiClient {
         HashMap<String, String>().apply {
             put("language", Locale.getDefault().language)
             put("score", score)
-            put("scoreTag", UUID.fromString(leaderboardId + score).toString())
+            if (!scoreTag.isNullOrEmpty()) put("scoreTag", scoreTag)
         }).toSubmitLeaderboardScoreResponse()
 
     /**
