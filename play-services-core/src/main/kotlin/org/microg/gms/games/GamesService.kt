@@ -155,6 +155,7 @@ class GamesService : BaseService(TAG, GmsService.GAMES) {
                     GamesServiceImpl(this@GamesService, lifecycle, packageName, account, player),
                     ConnectionInfo()
                 )
+                Log.d(TAG, "Games connection established for $packageName")
             } catch (e: Exception) {
                 Log.w(TAG, e)
                 runCatching { callback.onPostInitCompleteWithConnectionInfo(ConnectionResult.INTERNAL_ERROR, null, null) }
@@ -669,6 +670,7 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
                     builder.withRow(row)
                 }
                 callbacks?.onAchievementsLoaded(builder.build(CommonStatusCodes.SUCCESS))
+                Log.d(TAG, "Achievement callback completed for $packageName: status=0 rows=${definitions.size}")
             }.onFailure {
                 Log.w(TAG, "Could not load achievements", it)
                 callbacks?.onAchievementsLoaded(DataHolder.empty(GamesStatusCodes.NETWORK_ERROR_OPERATION_FAILED.code))
