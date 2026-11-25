@@ -1,7 +1,7 @@
 # LSPatch login compatibility
 
-Another Eden's Play Games and Google Identity login work with this fork and the
-AE module's service and Credential Manager routing on LSPatch 1.2 build 492. The fork
+The supported host baseline is LSPatch 1.2 release build 487 with this fork and the
+AE module's service and Credential Manager routing. The fork
 keeps its shared `app.revanced.android.gms` package and account type. Each app
 retains its own Google consent and publisher identity.
 
@@ -64,12 +64,13 @@ opens this page with the app's package URI. Android stores the selection for the
 current user when the provider is enabled through the system control.
 
 On 2026-11-25, the ARM64 debug/release builds and release vital lint passed. A
-release LSPatch 492 host on the RedMagic NX819J, Android 17/API 37,
+prior experimental host on the RedMagic NX819J, Android 17/API 37,
 displayed the native account chooser, completed assisted consent and returned to
 Another Eden's **Confirm Data Transfer** with the existing save. The final Transfer
 was left pending. This test used the local LSPatch test signer. The live Global
 bundle uses the Ashfur signer, and the RedMagic result does not validate a login
-from that bundle.
+from that bundle. Repeat the phone flow against the stable release host before
+using it as current end-to-end evidence.
 
 During review, the debug APK passed 25 Google ID option, account selection and
 diagnostic privacy checks on Android 14, 15 and 16 test devices and the Android 17
