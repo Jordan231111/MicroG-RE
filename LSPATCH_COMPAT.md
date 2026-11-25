@@ -60,8 +60,8 @@ the request data, cancellation, callback and native account-selection flow.
 
 Enable **Sign in with Google via MicroG RE** under additional credential providers
 in Android settings. Self-Check contains an actionable provider-status row that
-opens this page with the app's package URI. The user enables the provider through
-the standard system control. Rebuilding an APK cannot enable it on a user's device.
+opens this page with the app's package URI. Android stores the selection for the
+current user when the provider is enabled through the system control.
 
 On 2026-11-25, the ARM64 debug/release builds and release vital lint passed. A
 release LSPatch 492 host on the RedMagic NX819J, Android 17/API 37,
@@ -76,8 +76,8 @@ diagnostic privacy checks on Android 14, 15 and 16 test devices and the Android 
 phone. These checks use synthetic inputs and require neither installation of the
 test APK nor a Google account. They cover both option variants, the distinction
 between a known account and an authorized account, and redaction of sign-in
-account values. Full account login on Android 13–16 and developer-specific requirements such as
-hosted-domain enforcement or linked-account token deposition need separate testing.
+account values. Open test cases include full account login on Android 13–16,
+hosted-domain enforcement and linked-account token deposition.
 To repeat the checks after building the debug companion, run:
 
 ```sh
@@ -103,7 +103,6 @@ With Another Eden Global 3.17.70 / 710 on MuMu instance 1, Android 12 ARM64:
 - Continuing reached the game's **Confirm Data Transfer** screen.
 - The final Transfer action was not accepted, preserving the existing save.
 
-These observations cover the tested Games/Identity paths and landscape consent
-screen. They do not establish support for every Google Play service, SDK version,
-device, or future backend requirement. The earlier Rogue compatibility changes
+These observations cover the Games and Identity paths and the landscape consent
+screen on this device. The earlier Rogue compatibility changes
 remain described in [ROGUE_COMPAT.md](ROGUE_COMPAT.md).
