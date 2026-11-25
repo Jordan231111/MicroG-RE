@@ -17,6 +17,7 @@
 package org.microg.gms.ui;
 
 import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.CrossProfileApps;
 import android.content.pm.PackageManager;
@@ -69,6 +70,27 @@ public class SelfCheckFragment extends AbstractSelfCheckFragment {
             checks.add(new RomSpoofSignatureChecks());
         }
         checks.add(new InstalledPackagesChecks());
+        if (SDK_INT >= 34) {
+            checks.add(new SelfCheckGroup() {
+                @Override
+                public String getGroupName(Context context) {
+                    return context.getString(com.google.android.gms.R.string.credentials_service_sign_in_with_google_label);
+                }
+
+                @Override
+                public void doChecks(Context context, ResultCollector collector) {
+                    android.credentials.CredentialManager manager = context.getSystemService(android.credentials.CredentialManager.class);
+                    ComponentName provider = new ComponentName(context,
+                            com.google.android.gms.auth.api.credentials.credman.service.GoogleIdService.class);
+                    boolean enabled = manager != null && manager.isEnabledCredentialProviderService(provider);
+                    collector.addResult(context.getString(com.google.android.gms.R.string.morphe_sign_in_with_google_microg_label),
+                            enabled ? Result.Positive : Result.Advisory,
+                            context.getString(com.google.android.gms.R.string.self_check_resolution_google_credentials),
+                            fragment -> ((AbstractSelfCheckFragment) fragment).launchIntent(
+                                    new Intent(Settings.ACTION_CREDENTIAL_PROVIDER, Uri.parse("package:" + context.getPackageName()))));
+                }
+            });
+        }
         if (SDK_INT >= 23) {
             List<String> permissions = new ArrayList<>();
             permissions.add(ACCESS_COARSE_LOCATION);

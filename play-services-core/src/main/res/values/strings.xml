@@ -568,6 +568,7 @@ Some apps may not be able to register again after this action. You may need to c
     <string name="self_check_resolution_oem_restriction">Your system may restrict background processes. Tap here to open Don\'t Kill My App! site and learn how to disable these restrictions</string>
 
     <string name="morphe_sign_in_with_google_microg_label">Sign in with Google via MicroG RE</string>
+    <string name="self_check_resolution_google_credentials">Enable MicroG RE under additional credential providers in your device settings to sign into apps on Android 14 and newer.</string>
 
     <string name="self_check_patched_app_installed">Running with %1$s</string>
     <string name="self_check_action_download_morphe">Download Morphe</string>

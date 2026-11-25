@@ -1,7 +1,7 @@
 # LSPatch login compatibility
 
 Another Eden's Play Games and Google Identity login work with this fork and the
-AE module's existing selected-service routing on LSPatch 1.2 build 492. The fork
+AE module's service and Credential Manager routing on LSPatch 1.2 build 492. The fork
 keeps its shared `app.revanced.android.gms` package and account type. Each app
 retains its own Google consent and publisher identity.
 
@@ -40,6 +40,35 @@ The outer host and splits retain their chosen signing key. The publisher-signed
 source remains unchanged inside `origin.apk`; its public certificate supplies
 the OAuth identity. Sign companion updates with the same private key, kept
 outside Git.
+
+## Android 14 and newer
+
+On Android 14+, the game's Google ID client uses the platform Credential Manager
+and requests a system provider. On the RedMagic running Android 17 this selected
+stock GMS, which canceled the request without displaying an account chooser.
+The earlier Android 12 test used the One Tap Identity service.
+
+The Google ID provider now declares the canonical Google credential capability
+and retains the renamed MicroG capability for existing patched clients. The
+sign-in proxy uses the final platform request's authenticated caller and complete
+option data, handles both Google ID and Sign in with Google variants, and returns
+the requested credential type. Credential values are excluded from its diagnostics.
+
+The host's Identity adapter selects the verified companion as an allowed provider
+for its Google ID options and clears their system-only requirement. It preserves
+the request data, cancellation, callback and native account-selection flow.
+
+Enable **Sign in with Google via MicroG RE** under additional credential providers
+in Android settings. Self-Check contains an actionable provider-status row that
+opens this page with the app's package URI. The user enables the provider through
+the standard system control. Rebuilding an APK cannot enable it on a user's device.
+
+On 2026-11-25, the ARM64 debug/release builds and release vital lint passed. A
+release LSPatch 492 host on the unrooted RedMagic NX819J, Android 17/API 37,
+displayed the native account chooser, completed assisted consent and returned to
+Another Eden's **Confirm Data Transfer** with the existing save. The final Transfer
+was left pending. No Frida or system Xposed module was used. Android 14–16 devices
+remain untested.
 
 ## Verification
 

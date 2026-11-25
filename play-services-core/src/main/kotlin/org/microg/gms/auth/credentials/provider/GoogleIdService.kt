@@ -51,7 +51,7 @@ open class GoogleIdService : CredentialProviderService() {
             val credentialEntries = request.beginGetCredentialOptions
                 .flatMap { option ->
                     when (option.type) {
-                        TYPE_GOOGLE_ID_TOKEN_CREDENTIAL -> handleGoogleIdTokenRequest(option, request)
+                        TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL -> handleGoogleIdTokenRequest(option, request)
                         else -> emptyList<CredentialEntry>().also {
                             Log.d(TAG, "Unsupported credential type: ${option.type}")
                         }
@@ -176,7 +176,8 @@ const val GOOGLE_ID_BUNDLE_KEY_PROFILE_PICTURE_URI = "com.google.android.librari
 const val GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_FILTER_BY_AUTHORIZED_ACCOUNTS"
 
 // Credential types
-const val TYPE_GOOGLE_ID_TOKEN_CREDENTIAL = "${BuildConfig.BASE_PACKAGE_NAME}.android.libraries.identity.googleid.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL"
+const val TYPE_GOOGLE_ID_TOKEN_CREDENTIAL = "com.google.android.libraries.identity.googleid.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL"
+const val TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL = "${BuildConfig.BASE_PACKAGE_NAME}.android.libraries.identity.googleid.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL"
 
 data class GoogleIdRequestParams(
     val isSignInWithGoogle: Boolean,
@@ -197,6 +198,7 @@ data class GoogleIdRequestParams(
                 nonce = getString(if (isSignInWithGoogle) GOOGLE_ID_SIWG_NONCE else GOOGLE_ID_NONCE),
                 hostedDomainFilter = getString(GOOGLE_ID_SIWG_HOSTED_DOMAIN),
                 isAutoSelectAllowed = getBoolean(GOOGLE_ID_ANDROIDX_AUTO_SELECT, false),
+                filterByAuthorized = getBoolean(GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS, false),
                 linkedServiceId = getString(GOOGLE_ID_LINKED_SERVICE_ID),
                 requestVerifiedPhoneNumber = getBoolean(GOOGLE_ID_REQUEST_VERIFIED_PHONE, false)
             )

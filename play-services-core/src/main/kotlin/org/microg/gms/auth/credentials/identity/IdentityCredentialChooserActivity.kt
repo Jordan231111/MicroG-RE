@@ -47,6 +47,7 @@ import org.microg.gms.auth.credentials.provider.GOOGLE_ID_SERVER_CLIENT_ID
 import org.microg.gms.auth.credentials.provider.GOOGLE_ID_SIWG_NONCE
 import org.microg.gms.auth.credentials.provider.GOOGLE_ID_SIWG_SERVER_CLIENT_ID
 import org.microg.gms.auth.credentials.provider.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+import org.microg.gms.auth.credentials.provider.TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL
 import org.microg.gms.auth.credentials.provider.parsePublicKeyCredentialCreationOptions
 import org.microg.gms.auth.credentials.provider.parsePublicKeyCredentialRequestOptions
 import org.microg.gms.auth.credentials.provider.toJson
@@ -61,6 +62,7 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
 
     private var callingPackage: String = ""
     private var isCreatePath = false
+    private var googleCredentialType = TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,7 +95,10 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
             ?: return finishWithGetException(NoCredentialException("No credential options requested"))
         when (option.type) {
             PublicKeyCredential.TYPE_PUBLIC_KEY_CREDENTIAL -> startPasskeyGet(option)
-            TYPE_GOOGLE_ID_TOKEN_CREDENTIAL -> startGoogleSignIn(option)
+            TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL -> {
+                googleCredentialType = option.type
+                startGoogleSignIn(option)
+            }
             PasswordCredential.TYPE_PASSWORD_CREDENTIAL ->
                 finishWithGetException(NoCredentialException("Password credentials are not stored"))
             else -> finishWithGetException(NoCredentialException("Unsupported type: ${option.type}"))
@@ -227,7 +232,7 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
                 credential.familyName?.let { putString(GOOGLE_ID_BUNDLE_KEY_FAMILY_NAME, it) }
                 credential.profilePictureUri?.let { putString(GOOGLE_ID_BUNDLE_KEY_PROFILE_PICTURE_URI, it.toString()) }
             }
-            finishWithCredential(TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, credData)
+            finishWithCredential(googleCredentialType, credData)
         }.onFailure { e ->
             Log.e(TAG, "handleSignInResult failed", e)
             finishWithGetException(GetCredentialUnknownException(e.message ?: "Sign-in result error"))
