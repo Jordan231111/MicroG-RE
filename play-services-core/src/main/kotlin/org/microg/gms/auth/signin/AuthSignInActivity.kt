@@ -61,7 +61,6 @@ class AuthSignInActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setResult(CommonStatusCodes.CANCELED)
 
-        Log.d(TAG, "Request: $config")
 
         val packageName = config?.packageName
         if (packageName == null || (packageName != callingActivity?.packageName && callingActivity?.packageName != this.packageName))
@@ -228,7 +227,7 @@ class AuthSignInActivity : AppCompatActivity() {
             bundle.putByteArray(AuthConstants.STATUS, SafeParcelableSerializer.serializeToBytes(Status.CANCELED))
         }
         data.putExtras(bundle)
-        Log.d(TAG, "Result: ${data.extras?.also { it.keySet() }}")
+        Log.d(TAG, "Sign-in result code: $statusCode")
         setResult(RESULT_OK, data)
         finish()
     }

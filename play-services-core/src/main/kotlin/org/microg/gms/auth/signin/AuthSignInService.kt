@@ -76,9 +76,9 @@ class AuthSignInServiceImpl(
     private val queue = singleInstanceOf { Volley.newRequestQueue(context.applicationContext) }
 
     override fun silentSignIn(callbacks: ISignInCallbacks, options: GoogleSignInOptions?) {
-        Log.d(TAG, "$packageName:silentSignIn($options)")
+        Log.d(TAG, "$packageName:silentSignIn")
         fun sendResult(account: GoogleSignInAccount?, status: Status) {
-            Log.d(TAG, "Result[$status]: $account")
+            Log.d(TAG, "Sign-in status: ${status.statusCode}")
             runCatching { callbacks.onSignIn(account, status) }
         }
         lifecycleScope.launchWhenStarted {
@@ -95,7 +95,6 @@ class AuthSignInServiceImpl(
                     }
                 }
                 val account = currentAccount ?: SignInConfigurationService.getDefaultAccount(context, packageName)
-                Log.d(TAG, "silentSignIn: account -> ${account?.name}")
                 if (account != null && options?.isForceCodeForRefreshToken != true) {
                     if (getOAuthManager(context, packageName, options, account).isPermitted || AuthPrefs.isTrustGooglePermitted(context)) {
                         val (_, googleSignInAccount) = performSignIn(context, packageName, options, account)
@@ -118,13 +117,12 @@ class AuthSignInServiceImpl(
     }
 
     override fun signOut(callbacks: ISignInCallbacks, options: GoogleSignInOptions?) {
-        Log.d(TAG, "$packageName:signOut($options)")
+        Log.d(TAG, "$packageName:signOut")
         lifecycleScope.launchWhenStarted {
             try {
                 val account = account ?: options?.account ?: SignInConfigurationService.getDefaultAccount(context, packageName)
                 if (account != null) {
                     SignInConfigurationService.getAuthOptions(context, packageName).forEach {
-                        Log.d(TAG, "$packageName:signOut authOption:($it)")
                         performSignOut(context, packageName, it, account)
                     }
                 }
@@ -142,7 +140,7 @@ class AuthSignInServiceImpl(
     }
 
     override fun revokeAccess(callbacks: ISignInCallbacks, options: GoogleSignInOptions?) {
-        Log.d(TAG, "$packageName:revokeAccess($options)")
+        Log.d(TAG, "$packageName:revokeAccess")
         lifecycleScope.launchWhenStarted {
             val account = account ?: options?.account ?: SignInConfigurationService.getDefaultAccount(context, packageName)
             if (account != null) {

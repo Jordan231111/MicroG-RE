@@ -64,11 +64,25 @@ opens this page with the app's package URI. The user enables the provider throug
 the standard system control. Rebuilding an APK cannot enable it on a user's device.
 
 On 2026-11-25, the ARM64 debug/release builds and release vital lint passed. A
-release LSPatch 492 host on the unrooted RedMagic NX819J, Android 17/API 37,
+release LSPatch 492 host on the RedMagic NX819J, Android 17/API 37,
 displayed the native account chooser, completed assisted consent and returned to
 Another Eden's **Confirm Data Transfer** with the existing save. The final Transfer
-was left pending. No Frida or system Xposed module was used. Android 14–16 devices
-remain untested.
+was left pending. This test used the local LSPatch test signer. The live Global
+bundle uses the Ashfur signer, and the RedMagic result does not validate a login
+from that bundle.
+
+During review, the debug APK passed 25 Google ID option, account selection and
+diagnostic privacy checks on Android 14, 15 and 16 test devices and the Android 17
+phone. These checks use synthetic inputs and require neither installation of the
+test APK nor a Google account. They cover both option variants, the distinction
+between a known account and an authorized account, and redaction of sign-in
+account values. Full account login on Android 13–16 and developer-specific requirements such as
+hosted-domain enforcement or linked-account token deposition need separate testing.
+To repeat the checks after building the debug companion, run:
+
+```sh
+tools/test_google_id_options.sh SERIAL DEBUG_COMPANION.apk ANDROID_PLATFORM.jar D8
+```
 
 ## Verification
 

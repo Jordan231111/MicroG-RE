@@ -22,19 +22,19 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.collection.ArraySet
-import androidx.collection.arraySetOf
 import androidx.core.content.getSystemService
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.R
 import com.google.android.gms.auth.api.identity.BeginSignInRequest
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +45,12 @@ import org.microg.gms.auth.login.LoginActivity
 import org.microg.gms.common.AccountUtils
 import org.microg.gms.people.PeopleManager
 import org.microg.gms.utils.getApplicationLabel
+
+/** A null status is an account whose authorization could not be checked. */
+internal class SignInAccountChoices(statuses: Map<String, Boolean?>, authorizedOnly: Boolean) {
+    val accounts = if (authorizedOnly) statuses.filterValues { it == true } else statuses
+    val onlySelectable = accounts.entries.singleOrNull { it.value != null }
+}
 
 class AssistedSignInFragment : BottomSheetDialogFragment() {
 
@@ -77,7 +83,8 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
     private var loginJob: Job? = null
     private var isSigningIn = false
     private var signInBack = false
-    private val authStatusList = arraySetOf<Pair<String, Boolean?>>()
+    private var authStatusList: Map<String, Boolean?> = emptyMap()
+    private var refreshJob: Job? = null
 
     private var lastChooseAccount: Account? = null
 
@@ -91,19 +98,21 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
     }
 
     fun initView() {
+        if (loginJob?.isActive == true || signInBack) return
+        refreshJob?.cancel()
+        val requestedName = options.account?.name?.takeUnless { it == AuthConstants.DEFAULT_ACCOUNT }
+        val authorizedOnly = beginSignInRequest.googleIdTokenRequestOptions.filterByAuthorizedAccounts()
         accounts = accountManager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)
-        lifecycleScope.launch {
-            runCatching {
-                if (accounts.isEmpty()) {
+        refreshJob = lifecycleScope.launch {
+            try {
+                if (accounts.isEmpty() && requestedName == null && !authorizedOnly) {
                     addGoogleAccount()
                 } else {
-                    filterAccountsLogin({
-                        prepareMultiSignIn(it)
-                    }, { accountName, permitted ->
-                        autoSingleSignIn(accountName, permitted)
-                    })
+                    filterAccountsLogin(requestedName, authorizedOnly)
                 }
-            }.onFailure {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 errorResult()
             }
         }
@@ -133,33 +142,30 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private suspend fun filterAccountsLogin(multiMethod: (ArraySet<Pair<String, Boolean?>>) -> Unit, loginMethod: (String, Boolean) -> Unit) {
-        accounts.forEach { account ->
-            val authStatus = try {
+    private suspend fun filterAccountsLogin(requestedName: String?, authorizedOnly: Boolean) {
+        val statuses = linkedMapOf<String, Boolean?>()
+        for (account in accounts) {
+            if (requestedName != null && requestedName != account.name) continue
+            statuses[account.name] = try {
                 checkAccountAuthStatus(requireContext(), clientPackageName, options.scopes, account)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.d(TAG, "checkAccountAuthStatus: account:${account.name} auth error ", e)
+                Log.d(TAG, "Account authorization check failed: ${e.javaClass.simpleName}")
                 null
             }
-            authStatusList.add(Pair(account.name, authStatus))
         }
-        Log.d(TAG, "filterAccountsLogin: authStatusList: $authStatusList")
-        val checkAccounts = authStatusList.filter { it.second != null }
-        if (checkAccounts.size == 1) {
-            val pair = checkAccounts[0]
-            loginMethod(pair.first, pair.second!!)
-            return
+        val choices = SignInAccountChoices(statuses, authorizedOnly)
+        authStatusList = choices.accounts
+        val single = choices.onlySelectable
+        when {
+            single != null -> autoSingleSignIn(single.key, single.value == true)
+            authStatusList.isEmpty() -> errorResult(Status(CommonStatusCodes.SIGN_IN_REQUIRED))
+            else -> prepareMultiSignIn(authStatusList)
         }
-        val filterByAuthorizedAccounts = beginSignInRequest.googleIdTokenRequestOptions.filterByAuthorizedAccounts()
-        val authorizedAccounts = authStatusList.filter { it.second == true }
-        if (filterByAuthorizedAccounts && authorizedAccounts.isNotEmpty()) {
-            loginMethod(checkAccounts.first().first, true)
-            return
-        }
-        multiMethod(authStatusList)
     }
 
-    private fun prepareMultiSignIn(authorizedAccounts: ArraySet<Pair<String, Boolean?>>) {
+    private fun prepareMultiSignIn(authorizedAccounts: Map<String, Boolean?>) {
         lifecycleScope.launch {
             notifyCancelBtn(true)
             container?.removeAllViews()
@@ -169,8 +175,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
                 String.format(getString(R.string.credentials_assisted_choose_account_subtitle), clientAppLabel)
             val accountViews = chooseView.findViewById<LinearLayout>(R.id.sign_multi_account_container)
             val progress = chooseView.findViewById<ProgressBar>(R.id.sign_multi_progress)
-            authorizedAccounts.forEachIndexed { index, pair ->
-                val accountName = pair.first
+            authorizedAccounts.entries.forEachIndexed { index, (accountName, permitted) ->
                 val accountView = LayoutInflater.from(requireContext()).inflate(R.layout.assisted_signin_multi_layout, accountViews, false)
                 accountView.findViewById<TextView>(R.id.account_email).text = accountName
                 withContext(Dispatchers.IO) {
@@ -180,12 +185,12 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
                     PeopleManager.getOwnerAvatarBitmap(requireContext(), accountName, false)
                         ?: PeopleManager.getOwnerAvatarBitmap(requireContext(), accountName, true)
                 }.let { accountView.findViewById<ImageView>(R.id.account_photo).setImageBitmap(it) }
-                if (pair.second != null) {
+                if (permitted != null) {
                     accountView.findViewById<TextView>(R.id.account_description).text =
                         getString(R.string.credentials_assisted_signin_button_text_long)
                     accountView.setOnClickListener {
                         progress.visibility = View.VISIBLE
-                        prepareChooseLogin(accountName, pair.second!!)
+                        prepareChooseLogin(accountName, permitted)
                     }
                 } else {
                     accountView.findViewById<TextView>(R.id.account_description).apply {
@@ -194,7 +199,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
                     }
                     accountView.setOnClickListener(null)
                 }
-                if (index == accounts.size - 1) {
+                if (index == authorizedAccounts.size - 1) {
                     accountView.findViewById<View>(R.id.multi_account_line).visibility = View.GONE
                 }
                 accountViews.addView(accountView)
@@ -305,7 +310,9 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
     }
 
     override fun onDismiss(dialog: DialogInterface) {
-        if (!signInBack) {
+        refreshJob?.cancel()
+        val host = activity
+        if (!signInBack && host != null && !host.isFinishing && !host.isChangingConfigurations) {
             cancelLogin()
             errorResult(Status.CANCELED)
         }
@@ -325,17 +332,22 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
     }
 
     private fun startLogin(accountName: String) {
+        if (loginJob?.isActive == true) return
         loginJob = lifecycleScope.launch {
-            lastChooseAccount = accounts.find { it.name == accountName } ?: throw RuntimeException("account not found")
+            val account = accounts.find { it.name == accountName }
+                ?: return@launch errorResult(Status(CommonStatusCodes.SIGN_IN_REQUIRED))
+            lastChooseAccount = account
             isSigningIn = true
             delay(3000)
-            runCatching {
+            try {
                 val (_, googleSignInAccount) = withContext(Dispatchers.IO) {
-                    performSignIn(requireContext(), clientPackageName, options, lastChooseAccount!!, true, beginSignInRequest.googleIdTokenRequestOptions.nonce)
+                    performSignIn(requireContext(), clientPackageName, options, account, true, beginSignInRequest.googleIdTokenRequestOptions.nonce)
                 }
                 loginResult(googleSignInAccount)
-            }.onFailure {
-                Log.d(TAG, "startLogin: error", it)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.d(TAG, "Sign-in failed: ${e.javaClass.simpleName}")
                 errorResult()
             }
         }
@@ -346,7 +358,8 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
         isSigningIn = false
         loginJob?.cancel()
         if (showChoose && lastChooseAccount != null) {
-            prepareChooseLogin(lastChooseAccount!!.name, true)
+            val name = lastChooseAccount!!.name
+            prepareChooseLogin(name, authStatusList[name] == true)
         }
     }
 

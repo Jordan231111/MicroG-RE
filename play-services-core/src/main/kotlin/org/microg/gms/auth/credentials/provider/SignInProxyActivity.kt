@@ -12,13 +12,15 @@ import androidx.annotation.RequiresApi
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.provider.PendingIntentHandler
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.credentials.provider.ProviderCreateCredentialRequest
 import androidx.credentials.provider.ProviderGetCredentialRequest
 import com.google.android.gms.auth.api.identity.GetSignInIntentRequest
 import com.google.android.gms.auth.api.identity.BeginSignInRequest
 import com.google.android.gms.auth.api.identity.SignInCredential
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.CommonStatusCodes
+import com.google.android.gms.common.api.Status
 import com.google.android.gms.common.internal.safeparcel.SafeParcelableSerializer
 import org.microg.gms.auth.AuthConstants
 import org.microg.gms.auth.credentials.buildAssistedSignInIntent
@@ -35,9 +37,9 @@ class SignInProxyActivity : CredentialProviderActivity() {
     private var credentialType = TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
 
     override fun onProviderGetCredentialRequest(request: ProviderGetCredentialRequest) {
-        val option = request.credentialOptions.firstOrNull {
+        val option = request.credentialOptions.singleOrNull {
             it.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL || it.type == TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL
-        } ?: return finishWithException("Missing Google ID credential option")
+        } ?: return finishWithException("Expected one selected Google ID credential option")
         credentialType = option.type
         // The final platform request supplies the verified caller and full request data.
         // Candidate-query data may omit the caller and is insufficient for authentication.
@@ -84,18 +86,32 @@ class SignInProxyActivity : CredentialProviderActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_CODE_SIGN_IN) return
-        if (resultCode != RESULT_OK || data == null) {
-            Log.w(TAG, "SignIn activity canceled or failed")
-            return finishWithException("Sign in canceled", getExceptionCreator = ::GetCredentialCancellationException)
+        if (resultCode != RESULT_OK) {
+            val status = try {
+                data?.getByteArrayExtra(AuthConstants.STATUS)?.let {
+                    SafeParcelableSerializer.deserializeFromBytes(it, Status.CREATOR).statusCode
+                }
+            } catch (e: RuntimeException) {
+                return finishWithException("Invalid sign-in result")
+            }
+            when {
+                status == CommonStatusCodes.SIGN_IN_REQUIRED ->
+                    finishWithException("No eligible Google account", getExceptionCreator = ::NoCredentialException)
+                resultCode == RESULT_CANCELED && (status == null || status == CommonStatusCodes.CANCELED) ->
+                    finishWithException("Sign in canceled", getExceptionCreator = ::GetCredentialCancellationException)
+                else -> finishWithException("Sign-in activity failed")
+            }
+            return
         }
+        if (data == null) return finishWithException("Missing Google ID credential")
         Log.d(TAG, "onActivityResult - requestCode: $requestCode, resultCode: $resultCode")
         handleSignInSuccess(data)
     }
 
-    private fun handleSignInSuccess(data: Intent?) = runCatching {
+    private fun handleSignInSuccess(data: Intent) = runCatching {
         Log.d(TAG, "handleSignInSuccess")
 
-        val credentialBytes = data?.getByteArrayExtra(AuthConstants.SIGN_IN_CREDENTIAL)
+        val credentialBytes = data.getByteArrayExtra(AuthConstants.SIGN_IN_CREDENTIAL)
             ?: run {
                 Log.e(TAG, "No credential data in result")
                 return@runCatching finishWithException("No credential data")
@@ -106,9 +122,11 @@ class SignInProxyActivity : CredentialProviderActivity() {
             SignInCredential.CREATOR
         )
 
+        val idToken = signInCredential.googleIdToken
+        require(signInCredential.id.isNotBlank() && !idToken.isNullOrBlank()) { "Incomplete Google ID credential" }
         val credentialData = Bundle().apply {
             putString(GOOGLE_ID_BUNDLE_KEY_ID, signInCredential.id)
-            putString(GOOGLE_ID_BUNDLE_KEY_ID_TOKEN, signInCredential.googleIdToken)
+            putString(GOOGLE_ID_BUNDLE_KEY_ID_TOKEN, idToken)
             putString(GOOGLE_ID_BUNDLE_KEY_DISPLAY_NAME, signInCredential.displayName)
             putString(GOOGLE_ID_BUNDLE_KEY_GIVEN_NAME, signInCredential.givenName)
             putString(GOOGLE_ID_BUNDLE_KEY_FAMILY_NAME, signInCredential.familyName)
@@ -116,15 +134,7 @@ class SignInProxyActivity : CredentialProviderActivity() {
             putParcelable(GOOGLE_ID_BUNDLE_KEY_PROFILE_PICTURE_URI, signInCredential.profilePictureUri)
         }
 
-        val credential = CustomCredential(credentialType, credentialData)
-        val response = GetCredentialResponse(credential)
-
-        val resultIntent = Intent()
-        PendingIntentHandler.setGetCredentialResponse(resultIntent, response)
-        setResult(RESULT_OK, resultIntent)
-
-        Log.d(TAG, "Returning credential to Credential Manager")
-        finish()
+        finishWithSuccess(GetCredentialResponse(CustomCredential(credentialType, credentialData)))
     }.onFailure { e ->
         Log.e(TAG, "Error processing sign-in result", e)
         finishWithException(e.message)

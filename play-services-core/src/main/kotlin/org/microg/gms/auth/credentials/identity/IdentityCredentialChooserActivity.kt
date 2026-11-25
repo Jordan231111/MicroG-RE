@@ -189,7 +189,6 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
     }
 
     private fun handleFidoResult(resultCode: Int, data: Intent?) {
-        Log.d(TAG, "handleFidoResult: data: $data")
         if (resultCode != RESULT_OK || data == null) {
             return if (isCreatePath) finishWithCreateException(CreateCredentialUnknownException("Passkey flow canceled"))
             else finishWithGetException(GetCredentialCancellationException("Passkey flow canceled"))
@@ -206,7 +205,6 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
             val credData = Bundle().apply {
                 putString(if (isCreatePath) PUBKEY_RES_REG_JSON_KEY else PUBKEY_RES_AUTH_JSON_KEY, json)
             }
-            Log.d(TAG, "handleFidoResult: $credData")
             finishWithCredential(PublicKeyCredential.TYPE_PUBLIC_KEY_CREDENTIAL, credData)
         }.onFailure { e ->
             Log.e(TAG, "handleFidoResult failed", e)
@@ -224,9 +222,11 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
             val bytes = data.getByteArrayExtra(AuthConstants.SIGN_IN_CREDENTIAL)
                 ?: throw IllegalStateException("Sign-in result missing credential")
             val credential = SafeParcelableSerializer.deserializeFromBytes(bytes, SignInCredential.CREATOR)
+            val idToken = credential.googleIdToken
+            require(credential.id.isNotBlank() && !idToken.isNullOrBlank()) { "Incomplete Google ID credential" }
             val credData = Bundle().apply {
                 putString(GOOGLE_ID_BUNDLE_KEY_ID, credential.id)
-                credential.googleIdToken?.let { putString(GOOGLE_ID_BUNDLE_KEY_ID_TOKEN, it) }
+                putString(GOOGLE_ID_BUNDLE_KEY_ID_TOKEN, idToken)
                 credential.displayName?.let { putString(GOOGLE_ID_BUNDLE_KEY_DISPLAY_NAME, it) }
                 credential.givenName?.let { putString(GOOGLE_ID_BUNDLE_KEY_GIVEN_NAME, it) }
                 credential.familyName?.let { putString(GOOGLE_ID_BUNDLE_KEY_FAMILY_NAME, it) }
@@ -250,7 +250,6 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
             }
         }
         val extraKey = if (isCreatePath) EXTRA_CREATE_RESPONSE_BUNDLE else EXTRA_GET_RESPONSE_BUNDLE
-        Log.d(TAG, "finishWithCredential: extraKey: $extraKey responseBundle: $responseBundle")
         setResult(RESULT_OK, Intent().putExtra(extraKey, responseBundle))
         finish()
     }

@@ -330,16 +330,9 @@ public class GoogleSignInAccount extends AbstractSafeParcelable {
     @Override
     public String toString() {
         return ToStringHelper.name("GoogleSignInAccount")
-                .field("id", id)
-                .field("tokenId", idToken)
-                .field("email", email)
-                .field("displayName", displayName)
-                .field("givenName", givenName)
-                .field("familyName", familyName)
-                .field("photoUrl", photoUrl)
-                .field("serverAuthCode", serverAuthCode)
+                .field("hasIdToken", idToken != null)
+                .field("hasServerAuthCode", serverAuthCode != null)
                 .field("expirationTime", expirationTimeSecs)
-                .field("obfuscatedIdentifier", obfuscatedIdentifier)
                 .end();
     }
 

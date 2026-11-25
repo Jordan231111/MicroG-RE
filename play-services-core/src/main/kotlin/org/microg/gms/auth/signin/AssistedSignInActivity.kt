@@ -98,7 +98,6 @@ class AssistedSignInActivity : AppCompatActivity() {
     }
 
     private fun prepareSignIn() {
-        Log.d(TAG, "prepareSignIn options:$googleSignInOptions")
         val signInConfiguration = SignInConfiguration(clientPackageName!!, googleSignInOptions!!)
         val intent = Intent(this, AuthSignInActivity::class.java).apply {
             `package` = Constants.GMS_PACKAGE_NAME
@@ -121,7 +120,6 @@ class AssistedSignInActivity : AppCompatActivity() {
             errorResult(Status(CommonStatusCodes.CANCELED, "User cancelled."))
             return
         }
-        Log.d(TAG, "loginResult: googleSignInAccount: $googleSignInAccount")
         val credential = SignInCredential(
             googleSignInAccount.email,
             googleSignInAccount.displayName,
@@ -152,7 +150,6 @@ class AssistedSignInActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        Log.d(TAG, "onNewIntent intent:$intent")
         val fragment = supportFragmentManager.findFragmentByTag(AssistedSignInFragment.TAG)
         if (fragment != null) {
             val assistedSignInFragment = fragment as AssistedSignInFragment

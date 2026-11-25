@@ -28,9 +28,9 @@ import androidx.credentials.provider.CredentialEntry
 import androidx.credentials.provider.CredentialProviderService
 import androidx.credentials.provider.CustomCredentialEntry
 import com.google.android.gms.R
-import org.microg.gms.auth.credentials.provider.GoogleIdRequestParams.Companion.toGoogleIdRequestParams
 import org.microg.gms.auth.AuthConstants
 import org.microg.gms.base.core.BuildConfig
+import java.util.UUID
 
 private const val TAG = "GoogleIdService"
 
@@ -47,93 +47,51 @@ open class GoogleIdService : CredentialProviderService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<BeginGetCredentialResponse, GetCredentialException>
     ) {
-        runCatching {
-            val credentialEntries = request.beginGetCredentialOptions
-                .flatMap { option ->
-                    when (option.type) {
-                        TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL -> handleGoogleIdTokenRequest(option, request)
-                        else -> emptyList<CredentialEntry>().also {
-                            Log.d(TAG, "Unsupported credential type: ${option.type}")
-                        }
-                    }
-                }
-
-            callback.onResult(BeginGetCredentialResponse.Builder()
-                .setCredentialEntries(credentialEntries)
-                .build()
-                .also { Log.d(TAG, "Returning ${credentialEntries.size} credential entries") })
-
-        }.onFailure { e ->
-            Log.e(TAG, "Error in onBeginGetCredential", e)
-            callback.onError(GetCredentialUnknownException(e.message))
-        }
-    }
-
-    private fun handleGoogleIdTokenRequest(
-        option: BeginGetCredentialOption,
-        request: BeginGetCredentialRequest
-    ): List<CredentialEntry> = option.candidateQueryData.toGoogleIdRequestParams().let { params ->
-        val callingPackage = request.callingAppInfo?.packageName.orEmpty()
-        val accounts = AccountManager.get(this).getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)
-        if (accounts.isEmpty()) {
-            listOf(createCredentialEntry(
-                option = option,
-                params = params,
-                callingPackage = callingPackage,
-                title = getString(R.string.credentials_service_sign_in_with_google_label),
-                requestCode = TAG.hashCode(),
-            ))
-        } else {
-            accounts.map { account ->
-                createCredentialEntry(
-                    option = option,
-                    params = params,
-                    callingPackage = callingPackage,
-                    accountName = account.name,
-                    title = account.name,
-                    requestCode = account.name.hashCode()
-                )
+        if (cancellationSignal.isCanceled) return
+        val response = try {
+            val options = request.beginGetCredentialOptions.filter {
+                it.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL || it.type == TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL
             }
+            val entries = if (options.isEmpty()) emptyList() else {
+                val accounts = AccountManager.get(this).getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)
+                options.flatMap { option ->
+                    if (accounts.isEmpty()) listOf(createCredentialEntry(option, null))
+                    else accounts.map { createCredentialEntry(option, it.name) }
+                }
+            }
+            BeginGetCredentialResponse.Builder().setCredentialEntries(entries).build()
+        } catch (e: Exception) {
+            Log.w(TAG, "Credential lookup failed: ${e.javaClass.simpleName}")
+            if (!cancellationSignal.isCanceled) callback.onError(GetCredentialUnknownException("Credential lookup failed"))
+            return
         }
+        if (!cancellationSignal.isCanceled) callback.onResult(response)
     }
 
     private fun createCredentialEntry(
         option: BeginGetCredentialOption,
-        params: GoogleIdRequestParams,
-        callingPackage: String,
-        accountName: String? = null,
-        title: String,
-        requestCode: Int
+        accountName: String?
     ): CredentialEntry {
-        val intent = createGoogleIdIntent(params, callingPackage, accountName)
+        // PendingIntent identity ignores extras. Give each chooser entry its own identity
+        // so another request cannot update the account associated with a displayed row.
+        val intent = Intent(this, SignInProxyActivity::class.java).apply {
+            identifier = UUID.randomUUID().toString()
+            accountName?.let { putExtra(GOOGLE_ID_SIWG_ACCOUNT_NAME, it) }
+        }
         val pendingIntent = PendingIntent.getActivity(
-            this,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            this, 0, intent, PendingIntent.FLAG_MUTABLE
         )
 
         return CustomCredentialEntry(
             this,
-            title,
+            accountName ?: getString(R.string.credentials_service_sign_in_with_google_label),
             pendingIntent,
             option,
-            accountName?.takeIf { it != title },
+            null,
             null,
             null,
             Icon.createWithResource(this, R.drawable.ic_google_logo)
         )
-    }
-
-    private fun createGoogleIdIntent(
-        params: GoogleIdRequestParams,
-        callingPackage: String,
-        accountName: String?
-    ): Intent = Intent(this, SignInProxyActivity::class.java).apply {
-        accountName?.let { putExtra(GOOGLE_ID_SIWG_ACCOUNT_NAME, it) }
-        putExtra(GOOGLE_ID_SIWG_SERVER_CLIENT_ID, params.serverClientId ?: "")
-        putExtra(GOOGLE_ID_SIWG_NONCE, params.nonce)
-        putExtra(GOOGLE_ID_SIWG_CALLER_PACKAGE, callingPackage)
     }
 
     override fun onBeginCreateCredentialRequest(
@@ -159,8 +117,9 @@ const val GOOGLE_ID_TYPE_SIWG = "com.google.android.libraries.identity.googleid.
 const val GOOGLE_ID_SERVER_CLIENT_ID = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_SERVER_CLIENT_ID"
 const val GOOGLE_ID_NONCE = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_NONCE"
 const val GOOGLE_ID_LINKED_SERVICE_ID = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_LINKED_SERVICE_ID"
+const val GOOGLE_ID_AUTO_SELECT = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_AUTO_SELECT_ENABLED"
+const val GOOGLE_ID_SIWG_AUTO_SELECT = "com.google.android.libraries.identity.googleid.siwg.BUNDLE_KEY_AUTO_SELECT_ENABLED"
 const val GOOGLE_ID_REQUEST_VERIFIED_PHONE = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_REQUEST_VERIFIED_PHONE_NUMBER"
-const val GOOGLE_ID_SIWG_CALLER_PACKAGE = "com.google.android.libraries.identity.googleid.siwg.BUNDLE_KEY_CALLER_PACKAGE"
 const val GOOGLE_ID_SIWG_ACCOUNT_NAME = "com.google.android.libraries.identity.googleid.siwg.BUNDLE_KEY_ACCOUNT_NAME"
 const val GOOGLE_ID_SIWG_SERVER_CLIENT_ID = "com.google.android.libraries.identity.googleid.siwg.BUNDLE_KEY_SERVER_CLIENT_ID"
 const val GOOGLE_ID_SIWG_NONCE = "com.google.android.libraries.identity.googleid.siwg.BUNDLE_KEY_NONCE"
@@ -197,8 +156,9 @@ data class GoogleIdRequestParams(
                 serverClientId = getString(if (isSignInWithGoogle) GOOGLE_ID_SIWG_SERVER_CLIENT_ID else GOOGLE_ID_SERVER_CLIENT_ID),
                 nonce = getString(if (isSignInWithGoogle) GOOGLE_ID_SIWG_NONCE else GOOGLE_ID_NONCE),
                 hostedDomainFilter = getString(GOOGLE_ID_SIWG_HOSTED_DOMAIN),
-                isAutoSelectAllowed = getBoolean(GOOGLE_ID_ANDROIDX_AUTO_SELECT, false),
-                filterByAuthorized = getBoolean(GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS, false),
+                isAutoSelectAllowed = getBoolean(if (isSignInWithGoogle) GOOGLE_ID_SIWG_AUTO_SELECT else GOOGLE_ID_AUTO_SELECT,
+                    getBoolean(GOOGLE_ID_ANDROIDX_AUTO_SELECT, false)),
+                filterByAuthorized = getBoolean(GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS, true),
                 linkedServiceId = getString(GOOGLE_ID_LINKED_SERVICE_ID),
                 requestVerifiedPhoneNumber = getBoolean(GOOGLE_ID_REQUEST_VERIFIED_PHONE, false)
             )

@@ -82,12 +82,19 @@ public class SelfCheckFragment extends AbstractSelfCheckFragment {
                     android.credentials.CredentialManager manager = context.getSystemService(android.credentials.CredentialManager.class);
                     ComponentName provider = new ComponentName(context,
                             com.google.android.gms.auth.api.credentials.credman.service.GoogleIdService.class);
-                    boolean enabled = manager != null && manager.isEnabledCredentialProviderService(provider);
+                    Result status = Result.Unknown;
+                    try {
+                        if (manager != null) status = manager.isEnabledCredentialProviderService(provider) ? Result.Positive : Result.Advisory;
+                    } catch (RuntimeException failure) {
+                        // Some Android 14 implementations throw from this public status API.
+                        Log.w("SelfCheckCredentials", "Could not read credential provider status", failure);
+                    }
+                    Intent settings = new Intent(Settings.ACTION_CREDENTIAL_PROVIDER, Uri.fromParts("package", context.getPackageName(), null));
+                    boolean canOpenSettings = status != Result.Positive && settings.resolveActivity(context.getPackageManager()) != null;
                     collector.addResult(context.getString(com.google.android.gms.R.string.morphe_sign_in_with_google_microg_label),
-                            enabled ? Result.Positive : Result.Advisory,
+                            status,
                             context.getString(com.google.android.gms.R.string.self_check_resolution_google_credentials),
-                            fragment -> ((AbstractSelfCheckFragment) fragment).launchIntent(
-                                    new Intent(Settings.ACTION_CREDENTIAL_PROVIDER, Uri.parse("package:" + context.getPackageName()))));
+                            canOpenSettings ? fragment -> ((AbstractSelfCheckFragment) fragment).launchIntent(settings) : null);
                 }
             });
         }
