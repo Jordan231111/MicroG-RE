@@ -2,6 +2,8 @@
 
 Supporting Google authentication and Play Games companion for the game modules. The default package is `app.revanced.android.gms`, with account type `app.revanced`. Stable LSPatch 1.2 build 487 is the supported host baseline.
 
+Track [MorpheApp/MicroG-RE main](https://github.com/MorpheApp/MicroG-RE/tree/main) for upstream updates. Merge that branch without rewriting its history; keep fork changes limited to authentication compatibility, shared signing, delivery and demonstrated platform defects. Retain upstream APIs and service implementations where they already satisfy the host contract.
+
 Build with JDK 17 or 21, the pinned Gradle wrapper and Android SDK:
 
 ```sh

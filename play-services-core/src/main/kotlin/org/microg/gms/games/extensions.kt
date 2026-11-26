@@ -153,16 +153,16 @@ fun JSONObject.toPlayer() = PlayerEntity(
     0, 0,
     optString("avatarImageUrl").takeIf { it.isNotBlank() },
     optString("avatarImageUrl").takeIf { it.isNotBlank() },
-    getString("title"),
+    optString("title"),
     null,
-    getJSONObject("experienceInfo")?.let {
+    optJSONObject("experienceInfo")?.let {
         PlayerLevelInfo(
             it.optLong("currentExperiencePoints"),
             0,
-            it.getJSONObject("currentLevel")?.let {
+            it.optJSONObject("currentLevel")?.let {
                 PlayerLevel(it.getInt("level"), it.optLong("minExperiencePoints"), it.optLong("maxExperiencePoints"))
             },
-            it.getJSONObject("nextLevel")?.let {
+            it.optJSONObject("nextLevel")?.let {
                 PlayerLevel(it.getInt("level"), it.optLong("minExperiencePoints"), it.optLong("maxExperiencePoints"))
             }
         )
@@ -324,9 +324,16 @@ suspend fun fetchSelfPlayer(
     context: Context,
     authToken: String,
     queue: RequestQueue = singleInstanceOf { Volley.newRequestQueue(context.applicationContext) }
+) = fetchPlayer(context, authToken, "me", queue)
+
+internal suspend fun fetchPlayer(
+    context: Context,
+    authToken: String,
+    playerId: String,
+    queue: RequestQueue = singleInstanceOf { Volley.newRequestQueue(context.applicationContext) }
 ) = suspendCancellableCoroutine<JSONObject> { continuation ->
     val request = object : JsonObjectRequest(
-        "https://www.googleapis.com/games/v1/players/me",
+        "https://www.googleapis.com/games/v1/players/${Uri.encode(playerId)}",
         { if (continuation.isActive) continuation.resume(it) },
         { if (continuation.isActive) continuation.resumeWithException(it) }) {
         override fun getHeaders(): MutableMap<String, String> {
@@ -335,6 +342,9 @@ suspend fun fetchSelfPlayer(
             )
         }
     }
+    // Volley caches GETs by URL alone. Player responses also depend on the OAuth
+    // account and game; keep them in the existing account/connection caches only.
+    request.setShouldCache(false)
     continuation.invokeOnCancellation { request.cancel() }
     queue.add(request)
 }

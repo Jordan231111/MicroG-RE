@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Parcel
 import android.os.ParcelFileDescriptor
+import android.os.RemoteException
 import android.text.TextUtils
 import android.util.Log
 import androidx.core.app.PendingIntentCompat
@@ -24,6 +25,9 @@ import androidx.core.os.bundleOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.android.volley.NetworkError
+import com.android.volley.TimeoutError
+import com.android.volley.VolleyError
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.Scopes
@@ -47,6 +51,11 @@ import com.google.android.gms.games.internal.IGamesService
 import com.google.android.gms.games.snapshot.SnapshotColumns
 import com.google.android.gms.games.snapshot.SnapshotMetadataChangeEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.microg.gms.BaseService
@@ -164,8 +173,11 @@ class GamesService : BaseService(TAG, GmsService.GAMES) {
     }
 }
 
-class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, val packageName: String, val account: Account, val player: Player) :
+class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, val packageName: String, val account: Account, player: Player) :
     IGamesService.Stub(), LifecycleOwner {
+
+    @Volatile var player: Player = player
+        private set
 
     private val pattern: Pattern = Pattern.compile("[0-9a-zA-Z-._~]{1,100}")
     private var saveName: String? = null
@@ -236,6 +248,7 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
     }
 
     override fun getCurrentPlayer(): DataHolder? {
+        val player = player
         return if (player is PlayerEntity) {
             DataHolder.builder(PlayerColumns.CURRENT_PLAYER_COLUMNS.toTypedArray()).withRow(player.toContentValues()).build(CommonStatusCodes.SUCCESS)
         } else {
@@ -244,8 +257,52 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
     }
 
     override fun loadPlayer(callbacks: IGamesCallbacks?, playerId: String?) {
-        Log.d(TAG, "Not yet implemented: loadPlayer($playerId)")
+        loadPlayerV2(callbacks, playerId, false)
     }
+
+    override fun loadPlayerV2(callbacks: IGamesCallbacks?, playerId: String?, forceReload: Boolean) {
+        if (callbacks == null) return
+        // Start immediately so even a destroyed lifecycle returns an interrupted result.
+        lifecycleScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val cached = player as? PlayerEntity
+            val isCurrentPlayer = playerId == null || playerId == "me" || playerId == cached?.playerId
+            val result = try {
+                currentCoroutineContext().ensureActive()
+                val loaded = if (!forceReload && isCurrentPlayer && cached != null) {
+                    cached
+                } else {
+                    fetchPlayer(context, gamesToken(), if (isCurrentPlayer) "me" else playerId!!).toPlayer()
+                        .also { if (isCurrentPlayer) player = it }
+                }
+                playerData(loaded, GamesStatusCodes.OK.code)
+            } catch (e: CancellationException) {
+                sendPlayerResult(callbacks, DataHolder.empty(GamesStatusCodes.INTERRUPTED.code))
+                throw e
+            } catch (e: Exception) {
+                val networkFailure = e is NetworkError || e is TimeoutError ||
+                    (e is VolleyError && (e.networkResponse?.statusCode ?: 0) >= 500)
+                if (networkFailure && isCurrentPlayer && cached != null) {
+                    playerData(cached, GamesStatusCodes.NETWORK_ERROR_STALE_DATA.code)
+                } else {
+                    DataHolder.empty(if (networkFailure) GamesStatusCodes.NETWORK_ERROR_NO_DATA.code else GamesStatusCodes.INTERNAL_ERROR.code)
+                }
+            }
+            sendPlayerResult(callbacks, result)
+        }
+    }
+
+    private fun sendPlayerResult(callbacks: IGamesCallbacks, result: DataHolder) {
+        result.use {
+            try {
+                callbacks.onPlayersLoaded(it)
+            } catch (e: RemoteException) {
+                Log.d(TAG, "Player callback disconnected")
+            }
+        }
+    }
+
+    private fun playerData(value: PlayerEntity, statusCode: Int): DataHolder =
+        DataHolder.builder(PlayerColumns.CURRENT_PLAYER_COLUMNS.toTypedArray()).withRow(value.toContentValues()).build(statusCode)
 
     override fun loadInvitablePlayers(callbacks: IGamesCallbacks?, pageSize: Int, expandCachedData: Boolean, forceReload: Boolean) {
         Log.d(TAG, "Not yet implemented: loadInvitablePlayers($pageSize, $expandCachedData, $forceReload)")
@@ -650,6 +707,7 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
                 val builder = DataHolder.builder(columns)
                 for (definition in definitions) {
                     val state = progress[definition.id]
+                    val player = player
                     val row = if (player is PlayerEntity) player.toContentValues() else ContentValues()
                     row.put("external_achievement_id", definition.id)
                     row.put("external_game_id", gameAppId())
@@ -832,6 +890,7 @@ class GamesServiceImpl(val context: Context, override val lifecycle: Lifecycle, 
                 val columns = PlayerColumns.CURRENT_PLAYER_COLUMNS.toTypedArray() +
                         GameColumns.CURRENT_GAME_COLUMNS.toTypedArray() +
                         SnapshotColumns.CURRENT_GAME_COLUMNS.toTypedArray()
+                val player = player
                 val dataHolder = if (player is PlayerEntity) {
                     DataHolder.builder(columns)
                         .withRow(player.toContentValues()).build(CommonStatusCodes.SUCCESS)

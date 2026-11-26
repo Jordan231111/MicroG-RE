@@ -102,6 +102,7 @@ interface IGamesService {
 //    void resolveSnapshotConflict(IGamesCallbacks callbacks, String conflictId, String snapshotId, in SnapshotMetadataChangeEntity metadata, in Contents contents) = 12032;
     int getMaxDataSize() = 12034;
     int getMaxCoverImageSize() = 12035;
+    void loadPlayerV2(IGamesCallbacks callbacks, @nullable String playerId, boolean forceReload) = 13005;
     void resolveSnapshotHead(IGamesCallbacks callbacks, String saveName, int i) = 15000;
     void registerEventClient(IGamesClient callback, long l) = 15500;
     Intent getCompareProfileIntentForPlayer(in PlayerEntity player) = 15502;
