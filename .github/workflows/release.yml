@@ -131,25 +131,25 @@ jobs:
         with:
           cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
 
-      - name: "Build universal icon APK"
-        run: "./gradlew --no-daemon :play-services-core:assembleDefaultRelease"
+      - name: Load shared Android signing identity
+        env:
+          TEMPLATE_KS_BASE64: ${{ secrets.TEMPLATE_KS_BASE64 }}
+          TEMPLATE_KS_PASS: ${{ secrets.TEMPLATE_KS_PASS }}
+          TEMPLATE_KEY_ALIAS: ${{ secrets.TEMPLATE_KEY_ALIAS }}
+          TEMPLATE_KEY_PASS: ${{ secrets.TEMPLATE_KEY_PASS }}
+          TEMPLATE_CERT_SHA256: ${{ vars.TEMPLATE_CERT_SHA256 }}
+        run: python3 tools/setup_shared_signing.py
 
-      - name: "Sign universal icon APK"
-        id: sign_universal
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: play-services-core/build/outputs/apk/default/release
-          signingKey: ${{ secrets.KEYSTORE_B64 }}
-          keyAlias: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-          buildToolsVersion: 37.0.0
+      - name: "Build universal icon APK"
+        run: |
+          rm -f play-services-core/build/outputs/apk/default/release/*.apk
+          ./gradlew --no-daemon :play-services-core:assembleDefaultRelease
 
       - name: "Compute version"
         id: version
         run: |
-          APK="${{ steps.sign_universal.outputs.signedFile }}"
-          VER=$("$ANDROID_HOME"/build-tools/35.0.0/aapt dump badging "$APK" | grep -oP "versionName='\K[^']+")
+          APK=$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name "*.apk" -print -quit)
+          VER=$("$ANDROID_HOME"/build-tools/37.0.0/aapt dump badging "$APK" | grep -oP "versionName='\K[^']+")
           SAFE=$(echo "$VER" | sed -E 's/ \(.*\)//')
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "tag=$SAFE" >> "$GITHUB_OUTPUT"
@@ -157,97 +157,52 @@ jobs:
       - name: "Prepare universal icon APK"
         run: |
           mkdir -p dist
-          cp "${{ steps.sign_universal.outputs.signedFile }}" "dist/microg-${{ steps.version.outputs.tag }}.apk"
+          cp "$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name '*.apk' -print -quit)" "dist/microg-${{ steps.version.outputs.tag }}.apk"
 
       - name: "Build ARM64 icon APK"
-        run: "./gradlew --no-daemon :play-services-core:assembleDefaultRelease -Pabi=arm64-v8a"
-
-      - name: "Sign ARM64 icon APK"
-        id: sign_arm64
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: play-services-core/build/outputs/apk/default/release
-          signingKey: ${{ secrets.KEYSTORE_B64 }}
-          keyAlias: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-          buildToolsVersion: 37.0.0
+        run: |
+          rm -f play-services-core/build/outputs/apk/default/release/*.apk
+          ./gradlew --no-daemon :play-services-core:assembleDefaultRelease -Pabi=arm64-v8a
 
       - name: "Prepare ARM64 icon APK"
         run: |
-          cp "${{ steps.sign_arm64.outputs.signedFile }}" "dist/microg-${{ steps.version.outputs.tag }}-icon-arm64-v8a.apk"
+          cp "$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name '*.apk' -print -quit)" "dist/microg-${{ steps.version.outputs.tag }}-icon-arm64-v8a.apk"
 
       - name: "Build ARMv7 icon APK"
-        run: "./gradlew --no-daemon :play-services-core:assembleDefaultRelease -Pabi=armeabi-v7a"
-
-      - name: "Sign ARMv7 icon APK"
-        id: sign_armv7
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: play-services-core/build/outputs/apk/default/release
-          signingKey: ${{ secrets.KEYSTORE_B64 }}
-          keyAlias: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-          buildToolsVersion: 37.0.0
+        run: |
+          rm -f play-services-core/build/outputs/apk/default/release/*.apk
+          ./gradlew --no-daemon :play-services-core:assembleDefaultRelease -Pabi=armeabi-v7a
 
       - name: "Prepare ARMv7 icon APK"
         run: |
-          cp "${{ steps.sign_armv7.outputs.signedFile }}" "dist/microg-${{ steps.version.outputs.tag }}-icon-armeabi-v7a.apk"
+          cp "$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name '*.apk' -print -quit)" "dist/microg-${{ steps.version.outputs.tag }}-icon-armeabi-v7a.apk"
 
       - name: "Build universal noicon APK"
-        run: "./gradlew --no-daemon :play-services-core:assembleDefaultRelease -PnoIcon=true"
-
-      - name: "Sign universal noicon APK"
-        id: sign_noicon_universal
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: play-services-core/build/outputs/apk/default/release
-          signingKey: ${{ secrets.KEYSTORE_B64 }}
-          keyAlias: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-          buildToolsVersion: 37.0.0
+        run: |
+          rm -f play-services-core/build/outputs/apk/default/release/*.apk
+          ./gradlew --no-daemon :play-services-core:assembleDefaultRelease -PnoIcon=true
 
       - name: "Prepare universal noicon APK"
         run: |
-          cp "${{ steps.sign_noicon_universal.outputs.signedFile }}" "dist/microg-${{ steps.version.outputs.tag }}-noicon.apk"
+          cp "$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name '*.apk' -print -quit)" "dist/microg-${{ steps.version.outputs.tag }}-noicon.apk"
 
       - name: "Build ARM64 noicon APK"
-        run: "./gradlew --no-daemon :play-services-core:assembleDefaultRelease -PnoIcon=true -Pabi=arm64-v8a"
-
-      - name: "Sign ARM64 noicon APK"
-        id: sign_noicon_arm64
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: play-services-core/build/outputs/apk/default/release
-          signingKey: ${{ secrets.KEYSTORE_B64 }}
-          keyAlias: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-          buildToolsVersion: 37.0.0
+        run: |
+          rm -f play-services-core/build/outputs/apk/default/release/*.apk
+          ./gradlew --no-daemon :play-services-core:assembleDefaultRelease -PnoIcon=true -Pabi=arm64-v8a
 
       - name: "Prepare ARM64 noicon APK"
         run: |
-          cp "${{ steps.sign_noicon_arm64.outputs.signedFile }}" "dist/microg-${{ steps.version.outputs.tag }}-noicon-arm64-v8a.apk"
+          cp "$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name '*.apk' -print -quit)" "dist/microg-${{ steps.version.outputs.tag }}-noicon-arm64-v8a.apk"
 
       - name: "Build ARMv7 noicon APK"
-        run: "./gradlew --no-daemon :play-services-core:assembleDefaultRelease -PnoIcon=true -Pabi=armeabi-v7a"
-
-      - name: "Sign ARMv7 noicon APK"
-        id: sign_noicon_armv7
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: play-services-core/build/outputs/apk/default/release
-          signingKey: ${{ secrets.KEYSTORE_B64 }}
-          keyAlias: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-          buildToolsVersion: 37.0.0
+        run: |
+          rm -f play-services-core/build/outputs/apk/default/release/*.apk
+          ./gradlew --no-daemon :play-services-core:assembleDefaultRelease -PnoIcon=true -Pabi=armeabi-v7a
 
       - name: "Prepare ARMv7 noicon APK"
         run: |
-          cp "${{ steps.sign_noicon_armv7.outputs.signedFile }}" "dist/microg-${{ steps.version.outputs.tag }}-noicon-armeabi-v7a.apk"
+          cp "$(find play-services-core/build/outputs/apk/default/release -maxdepth 1 -name '*.apk' -print -quit)" "dist/microg-${{ steps.version.outputs.tag }}-noicon-armeabi-v7a.apk"
 
       - name: "List APKs"
         run: ls -lh dist/
@@ -299,28 +254,6 @@ jobs:
             --title "$TAG" \
             --notes-file "$NOTES" \
             "${FLAGS[@]}"
-
-      # GITHUB_TOKEN cannot dispatch events to other repositories, so use a GitHub App token.
-      - name: "Generate website deploy token"
-        id: app-token
-        if: steps.bump.outputs.name != ''
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.MORPHE_AAMATT_APP_ID }}
-          private-key: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
-          owner: MorpheApp
-
-      - name: "Trigger website deploy"
-        if: steps.bump.outputs.name != ''
-        uses: actions/github-script@v9
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            await github.rest.repos.createDispatchEvent({
-              owner: 'MorpheApp',
-              repo: 'morphe-website',
-              event_type: 'trigger-deploy'
-            })
 
       # Pushes made with GITHUB_TOKEN do not trigger other workflows, so start the back merge manually.
       - name: "Back merge main to dev"
@@ -376,3 +309,6 @@ jobs:
           if-no-files-found: error
           archive: false
           path: dist/microg-${{ steps.version.outputs.tag }}-noicon-armeabi-v7a.apk
+      - name: Remove staged signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/shared-android-signing.p12"

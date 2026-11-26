@@ -59,7 +59,7 @@ class AuthSignInActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setResult(CommonStatusCodes.CANCELED)
+        setResult(RESULT_CANCELED)
 
 
         val packageName = config?.packageName
@@ -145,8 +145,8 @@ class AuthSignInActivity : AppCompatActivity() {
                     try {
                         signIn(accounts[position])
                     } catch (e: Exception) {
-                        Log.w(TAG, e)
-                        finishResult(CommonStatusCodes.INTERNAL_ERROR)
+                        Log.w(TAG, "Sign-in failed: ${e.javaClass.simpleName}")
+                        finishResult(signInFailureStatus(e).statusCode)
                     }
                 }
             }
@@ -169,8 +169,8 @@ class AuthSignInActivity : AppCompatActivity() {
                 try {
                     signIn(account)
                 } catch (e: Exception) {
-                    Log.w(TAG, e)
-                    finishResult(CommonStatusCodes.INTERNAL_ERROR)
+                    Log.w(TAG, "Sign-in failed: ${e.javaClass.simpleName}")
+                    finishResult(signInFailureStatus(e).statusCode)
                 }
             }
         }
@@ -214,9 +214,9 @@ class AuthSignInActivity : AppCompatActivity() {
             val credential = SignInCredential(
                 googleSignInAccount.email,
                 googleSignInAccount.displayName,
-                googleSignInAccount.familyName,
                 googleSignInAccount.givenName,
-                null, null,
+                googleSignInAccount.familyName,
+                googleSignInAccount.photoUrl, null,
                 googleSignInAccount.idToken,
                 null, null
             )
@@ -224,7 +224,7 @@ class AuthSignInActivity : AppCompatActivity() {
             bundle.putByteArray(AuthConstants.SIGN_IN_CREDENTIAL, credentialToBytes)
             bundle.putByteArray(AuthConstants.STATUS, SafeParcelableSerializer.serializeToBytes(Status.SUCCESS))
         } else {
-            bundle.putByteArray(AuthConstants.STATUS, SafeParcelableSerializer.serializeToBytes(Status.CANCELED))
+            bundle.putByteArray(AuthConstants.STATUS, SafeParcelableSerializer.serializeToBytes(Status(statusCode, message)))
         }
         data.putExtras(bundle)
         Log.d(TAG, "Sign-in result code: $statusCode")

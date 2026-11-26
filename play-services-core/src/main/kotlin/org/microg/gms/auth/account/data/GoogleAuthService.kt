@@ -52,12 +52,12 @@ class GoogleAuthService : BaseService(TAG, GmsService.GOOGLE_AUTH){
 
 class GoogleAuthServiceImpl : IGoogleAuthService.Stub() {
     override fun getTokenWithDetails(callback: IGetTokenWithDetailsCallback?, account: Account?, service: String?, extras: Bundle?) {
-        Log.d(TAG, "Not yet implemented: getTokenWithDetails($account, $service, $extras)")
+        Log.d(TAG, "Not yet implemented: getTokenWithDetails")
         callback?.onTokenResults(Status.INTERNAL_ERROR, Bundle.EMPTY)
     }
 
     override fun clearToken(callback: IStatusCallback?, request: ClearTokenRequest?) {
-        Log.d(TAG, "Not yet implemented: clearToken($request)")
+        Log.d(TAG, "Not yet implemented: clearToken")
         callback?.onResult(Status.INTERNAL_ERROR)
     }
 
@@ -72,12 +72,12 @@ class GoogleAuthServiceImpl : IGoogleAuthService.Stub() {
     }
 
     override fun getAccounts(callback: IGetAccountsCallback?, request: GetAccountsRequest?) {
-        Log.d(TAG, "Not yet implemented: getAccounts($request)")
+        Log.d(TAG, "Not yet implemented: getAccounts")
         callback?.onBundle(Status.INTERNAL_ERROR, emptyList())
     }
 
     override fun removeAccount(callback: IBundleCallback?, account: Account?) {
-        Log.d(TAG, "Not yet implemented: removeAccount($account)")
+        Log.d(TAG, "Not yet implemented: removeAccount")
         callback?.onBundle(Status.INTERNAL_ERROR, Bundle.EMPTY)
     }
 
@@ -87,7 +87,7 @@ class GoogleAuthServiceImpl : IGoogleAuthService.Stub() {
     }
 
     override fun getHubToken(callback: IGetHubTokenCallback?, request: GetHubTokenRequest?) {
-        Log.d(TAG, "Not yet implemented: getHubToken($request)")
+        Log.d(TAG, "Not yet implemented: getHubToken")
         callback?.onGetHubTokenResponse(Status.INTERNAL_ERROR, GetHubTokenInternalResponse())
     }
 

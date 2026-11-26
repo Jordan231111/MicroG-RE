@@ -71,7 +71,7 @@ class KeyRetrievalService : BaseService(TAG, GmsService.FOLSOM) {
     override fun handleServiceRequest(callback: IGmsCallbacks, request: GetServiceRequest, service: GmsService) {
         val packageName = PackageUtils.getAndCheckCallingPackage(this, request.packageName)
         val bundle = request.extras
-        Log.d(TAG, "handleServiceRequest: packageName=${packageName}, extras=$bundle")
+        Log.d(TAG, "handleServiceRequest: packageName=${packageName}")
         val securityDomain = bundle?.getString(KEY_SECURITY_DOMAIN)
         if (securityDomain.isNullOrEmpty()) {
             Log.w(TAG, "Security domain is not set")
@@ -97,22 +97,22 @@ class KeyRetrievalServiceImpl(
 ) : IKeyRetrievalService.Stub(), LifecycleOwner {
 
     override fun setConsent(callback: IKeyRetrievalConsentCallback?, accountName: String?, force: Boolean, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented setConsent accountName:$accountName force:$force")
+        Log.d(TAG, "Not implemented setConsent requested")
         callback?.onResult(Status.SUCCESS, true)
     }
 
     override fun getConsent(callback: IKeyRetrievalConsentCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented getConsent accountName:$accountName")
+        Log.d(TAG, "Not implemented getConsent requested")
         callback?.onResult(Status.SUCCESS, false)
     }
 
     override fun getSyncStatus(callback: IKeyRetrievalSyncStatusCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented getSyncStatus accountName:$accountName")
+        Log.d(TAG, "Not implemented getSyncStatus requested")
         callback?.onResult(Status.SUCCESS, true)
     }
 
     override fun markLocalKeysAsStale(callback: IKeyRetrievalCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "markLocalKeysAsStale accountName:$accountName")
+        Log.d(TAG, "markLocalKeysAsStale requested")
         if (accountName.isNullOrEmpty()) {
             callback?.onResult(Status.INTERNAL_ERROR)
             return
@@ -137,7 +137,7 @@ class KeyRetrievalServiceImpl(
     }
 
     override fun getKeyMaterial(callback: ISharedKeyCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "getKeyMaterial accountName:$accountName securityDomain:$domainId")
+        Log.d(TAG, "getKeyMaterial requested")
         if (accountName.isNullOrEmpty()) {
             Log.w(TAG, "getKeyMaterial: accountName is null or empty")
             callback?.onResult(Status(CommonStatusCodes.DEVELOPER_ERROR), emptyArray<SharedKey>())
@@ -196,37 +196,37 @@ class KeyRetrievalServiceImpl(
     }
 
     override fun setKeyMaterial(callback: IKeyRetrievalCallback?, accountName: String?, keys: Array<out SharedKey?>?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented setKeyMaterial accountName:$accountName")
+        Log.d(TAG, "Not implemented setKeyMaterial requested")
         callback?.onResult(Status.INTERNAL_ERROR)
     }
 
     override fun getRecoveredSecurityDomains(callback: IStringListCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented getRecoveredSecurityDomains accountName:$accountName")
+        Log.d(TAG, "Not implemented getRecoveredSecurityDomains requested")
         callback?.onResult(Status.SUCCESS, emptyArray<String>())
     }
 
     override fun startRecoveryOperation(callback: IRecoveryResultCallback?, metadata: ApiMetadata?, request: RecoveryRequest?) {
-        Log.d(TAG, "Not implemented startRecoveryOperation request:$request")
+        Log.d(TAG, "Not implemented startRecoveryOperation requested")
         callback?.onResult(Status.SUCCESS, RecoveryResult())
     }
 
     override fun listVaultsOperation(callback: IByteArrayListCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented listVaultsOperation accountName:$accountName")
+        Log.d(TAG, "Not implemented listVaultsOperation requested")
         callback?.onResult(Status.SUCCESS, emptyList<ByteArray>())
     }
 
     override fun generateOpenVaultRequestOperation(callback: IByteArrayCallback?, request: RecoveryRequest?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented generateOpenVaultRequestOperation request:$request")
+        Log.d(TAG, "Not implemented generateOpenVaultRequestOperation requested")
         callback?.onResult(Status.SUCCESS, byteArrayOf(), ApiMetadata.DEFAULT)
     }
 
     override fun joinSecurityDomain(callback: IStatusCallback?, accountName: String?, bytes: ByteArray?, type: Int, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented joinSecurityDomain accountName:$accountName type:$type")
+        Log.d(TAG, "Not implemented joinSecurityDomain requested")
         callback?.onResult(Status.SUCCESS)
     }
 
     override fun resetSecurityDomain(callback: IStatusCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented resetSecurityDomain accountName:$accountName")
+        Log.d(TAG, "Not implemented resetSecurityDomain requested")
         callback?.onResult(Status.SUCCESS)
     }
 
@@ -236,7 +236,7 @@ class KeyRetrievalServiceImpl(
             callback?.onResult(Status.INTERNAL_ERROR, emptyArray<SecurityDomainMember>(), metadata ?: ApiMetadata.DEFAULT)
             return
         }
-        Log.d(TAG, "listSecurityDomainMembers accountName:$accountName securityDomain:$domainId")
+        Log.d(TAG, "listSecurityDomainMembers requested")
         lifecycleScope.launchWhenStarted {
             try {
                 val response = runCatching {
@@ -279,7 +279,7 @@ class KeyRetrievalServiceImpl(
             callback?.onResult(Status.INTERNAL_ERROR, byteArrayOf(), ApiMetadata.DEFAULT)
             return
         }
-        Log.d(TAG, "getDomainState accountName:$accountName securityDomain:$domainId")
+        Log.d(TAG, "getDomainState requested")
         lifecycleScope.launchWhenStarted {
             try {
                 val localKeyManager = LocalKeyManager.getInstance(context)
@@ -315,7 +315,7 @@ class KeyRetrievalServiceImpl(
     }
 
     override fun startUxFlow(callback: IKeyRetrievalCallback?, accountName: String?, type: Int, metadata: ApiMetadata?) {
-        Log.d(TAG, "startUxFlow accountName:$accountName type:$type")
+        Log.d(TAG, "startUxFlow requested")
         if (accountName.isNullOrEmpty()) {
             callback?.onResult(Status(CommonStatusCodes.DEVELOPER_ERROR))
             return
@@ -327,47 +327,47 @@ class KeyRetrievalServiceImpl(
     }
 
     override fun promptForLskfConsent(callback: IKeyRetrievalCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented promptForLskfConsent accountName:$accountName")
+        Log.d(TAG, "Not implemented promptForLskfConsent requested")
         callback?.onResult(Status.SUCCESS)
     }
 
     override fun canSilentlyAddGaiaPassword(callback: IBooleanCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented canSilentlyAddGaiaPassword accountName:$accountName")
+        Log.d(TAG, "Not implemented canSilentlyAddGaiaPassword requested")
         callback?.onResult(Status.SUCCESS, true)
     }
 
     override fun addGaiaPasswordMember(callback: IStatusCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented addGaiaPasswordMember accountName:$accountName")
+        Log.d(TAG, "Not implemented addGaiaPasswordMember requested")
         callback?.onResult(Status.SUCCESS)
     }
 
     override fun getProductDetails(callback: IByteArrayCallback?, accountName: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not implemented getProductDetails accountName:$accountName")
+        Log.d(TAG, "Not implemented getProductDetails requested")
         callback?.onResult(Status.SUCCESS, byteArrayOf(), ApiMetadata.DEFAULT)
     }
 
     override fun getProductKeysOperation(callback: IProductKeyCallback?, accountName: String?, accountName2: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not yet implemented: GetProductKeysOperation accountName:$accountName")
+        Log.d(TAG, "Not yet implemented: GetProductKeysOperation requested")
         callback?.onResult(Status.SUCCESS, emptyArray<ProductKey>(), metadata)
     }
 
     override fun createPrfMemberOperation(callback: IStatusCallback?, accountName: String?, bytes: ByteArray?, bytes2: ByteArray?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not yet implemented: CreatePrfMemberOperation accountName:$accountName")
+        Log.d(TAG, "Not yet implemented: CreatePrfMemberOperation requested")
         callback?.onResult(Status.SUCCESS)
     }
 
     override fun addRecoveryContactToDependentKeychainOperation(callback: IStatusCallback?, accountName: String?, accountName2: String?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not yet implemented: AddRecoveryContactToDependentKeychainOperation accountName:$accountName")
+        Log.d(TAG, "Not yet implemented: AddRecoveryContactToDependentKeychainOperation requested")
         callback?.onResult(Status.SUCCESS)
     }
 
     override fun createRetrievalPacketOperation(callback: IStatusCallback?, accountName: String?, accountName2: String?, bytes: ByteArray?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not yet implemented: CreateRetrievalPacketOperation accountName:$accountName")
+        Log.d(TAG, "Not yet implemented: CreateRetrievalPacketOperation requested")
         callback?.onResult(Status.SUCCESS)
     }
 
     override fun setClaimantKeyOperation(callback: IStatusCallback?, accountName: String?, bytes: ByteArray?, bytes2: ByteArray?, metadata: ApiMetadata?) {
-        Log.d(TAG, "Not yet implemented: SetClaimantKeyOperation accountName:$accountName")
+        Log.d(TAG, "Not yet implemented: SetClaimantKeyOperation requested")
         callback?.onResult(Status.SUCCESS)
     }
 

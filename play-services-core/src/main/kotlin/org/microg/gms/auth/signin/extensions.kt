@@ -126,7 +126,7 @@ suspend fun performSignIn(context: Context, packageName: String, options: Google
     var consentResult:String ?= null
     if ("remote_consent" == authResponse.issueAdvice && authResponse.resolutionDataBase64 != null){
         consentResult = performConsentView(context, packageName, account, authResponse.resolutionDataBase64)
-        if (consentResult == null) return Pair(null, null)
+        if (consentResult == null) throw ConsentCanceledException()
         authResponse = authManager.let {
             it.putDynamicField(CONSENT_RESULT, consentResult)
             withContext(Dispatchers.IO) { it.requestAuth(true) }
@@ -152,6 +152,8 @@ suspend fun performSignIn(context: Context, packageName: String, options: Google
         consentResult?.let { result -> it.putDynamicField(CONSENT_RESULT, result) }
         withContext(Dispatchers.IO) { it.requestAuth(true) }
     }
+    check(options?.isIdTokenRequested != true || !idTokenResponse?.auth.isNullOrBlank()) { "Missing requested ID token" }
+    check(options?.isServerAuthCodeRequested != true || !serverAuthTokenResponse?.auth.isNullOrBlank()) { "Missing requested server auth code" }
     val googleUserId = authManager.getUserData("GoogleUserId")
     val id = if (options?.includeId == true) googleUserId else null
     val tokenId = if (options?.isIdTokenRequested == true) idTokenResponse?.auth else null
@@ -198,14 +200,13 @@ suspend fun performSignIn(context: Context, packageName: String, options: Google
 }
 
 suspend fun performConsentView(context: Context, packageName: String, account: Account, dataBase64: String): String? {
-    Log.d(TAG, "performConsentView: $dataBase64")
+    Log.d(TAG, "performConsentView requested")
     val consentResponse = ConsentUrlResponse.ADAPTER.decode(Base64.decode(dataBase64, Base64.URL_SAFE))
-    Log.d(TAG, "performConsentView: consentResponse -> $consentResponse ")
     val response = getCookiesManager(context, packageName, account).let {
         it.isGmsApp = true
         withContext(Dispatchers.IO) { it.requestAuth(true) }
     }
-    val cookiesAuth = response.auth ?: return null
+    val cookiesAuth = checkNotNull(response.auth) { "Missing consent cookie response" }
     val cookiesResponse = ConsentCookiesResponse.ADAPTER.decode(Base64.decode(cookiesAuth, Base64.URL_SAFE))
     val cookies = arrayListOf(consentResponse.cookie).apply {
         cookiesResponse.consentCookies?.cookies?.filter { ".google.com" == it.domain || "accounts.google.com" == it.path }?.forEach { add(it) }
@@ -218,7 +219,7 @@ suspend fun performConsentView(context: Context, packageName: String, account: A
             putExtra(CONSENT_MESSENGER, Messenger(object : Handler(Looper.getMainLooper()) {
                 override fun handleMessage(msg: Message) {
                     val content = msg.data.getString(CONSENT_RESULT)
-                    Log.d(TAG, "performConsentView: ConsentSignInActivity deferred content: $content")
+                    Log.d(TAG, "Consent response received")
                     deferred.complete(content)
                 }
             }))

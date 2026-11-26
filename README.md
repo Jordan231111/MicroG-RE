@@ -1,74 +1,20 @@
-# microG Services
+# MicroG RE
 
-[![Website badge](https://img.shields.io/badge/Website-gray.svg?logo=data:image/svg%2bxml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ29weXJpZ2h0IDIwMjUgTW9ycGhlLiBUaGlzIGlzIGNvcHlyaWdodGVkIGNvbnRlbnQsIGFuZCBub3QgbGljZW5zZWQgdW5kZXIgb3BlbiBzb3VyY2UgdGVybXMuCiAgICAgU2VlIGh0dHBzOi8vZ2l0aHViLmNvbS9Nb3JwaGVBcHAvbW9ycGhlLWJyYW5kaW5nIC0tPgoKPHN2ZwogICB3aWR0aD0iNTEyIgogICBoZWlnaHQ9IjUxMiIKICAgdmlld0JveD0iMCAwIDUxMiA1MTIiCiAgIHZlcnNpb249IjEuMSIKICAgaWQ9InN2ZzIiCiAgIHNvZGlwb2RpOmRvY25hbWU9Im1vcnBoZV9sb2dvX2xpZ2h0LnN2ZyIKICAgaW5rc2NhcGU6dmVyc2lvbj0iMS40LjIgKGViZjBlOTQwZDAsIDIwMjUtMDUtMDgpIgogICB4bWxuczppbmtzY2FwZT0iaHR0cDovL3d3dy5pbmtzY2FwZS5vcmcvbmFtZXNwYWNlcy9pbmtzY2FwZSIKICAgeG1sbnM6c29kaXBvZGk9Imh0dHA6Ly9zb2RpcG9kaS5zb3VyY2Vmb3JnZS5uZXQvRFREL3NvZGlwb2RpLTAuZHRkIgogICB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciCiAgIHhtbG5zOnN2Zz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxzb2RpcG9kaTpuYW1lZHZpZXcKICAgICBpZD0ibmFtZWR2aWV3MiIKICAgICBwYWdlY29sb3I9IiNmZmZmZmYiCiAgICAgYm9yZGVyY29sb3I9IiMwMDAwMDAiCiAgICAgYm9yZGVyb3BhY2l0eT0iMC4yNSIKICAgICBpbmtzY2FwZTpzaG93cGFnZXNoYWRvdz0iMiIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VjaGVja2VyYm9hcmQ9IjAiCiAgICAgaW5rc2NhcGU6ZGVza2NvbG9yPSIjZDFkMWQxIgogICAgIGlua3NjYXBlOnpvb209IjEuMTU0Mjk2OSIKICAgICBpbmtzY2FwZTpjeD0iMjU2IgogICAgIGlua3NjYXBlOmN5PSIyNTYiCiAgICAgaW5rc2NhcGU6d2luZG93LXdpZHRoPSIxNDQwIgogICAgIGlua3NjYXBlOndpbmRvdy1oZWlnaHQ9IjgzNiIKICAgICBpbmtzY2FwZTp3aW5kb3cteD0iMCIKICAgICBpbmtzY2FwZTp3aW5kb3cteT0iMCIKICAgICBpbmtzY2FwZTp3aW5kb3ctbWF4aW1pemVkPSIxIgogICAgIGlua3NjYXBlOmN1cnJlbnQtbGF5ZXI9InN2ZzIiPgogICAgPGlua3NjYXBlOnBhZ2UKICAgICAgIHg9IjAiCiAgICAgICB5PSIwIgogICAgICAgd2lkdGg9IjUxMiIKICAgICAgIGhlaWdodD0iNTEyIgogICAgICAgaWQ9InBhZ2UyIgogICAgICAgbWFyZ2luPSIwIgogICAgICAgYmxlZWQ9IjAiIC8+CiAgPC9zb2RpcG9kaTpuYW1lZHZpZXc+CiAgPGRlZnMKICAgICBpZD0iZGVmczIiIC8+CiAgPCEtLSBMZXR0ZXIgLS0+CiAgPGcKICAgICBpZD0iTGV0dGVyIgogICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7ZmlsbC1vcGFjaXR5OjEiPgogICAgPHBhdGgKICAgICAgIGlkPSJMZWZ0IgogICAgICAgZD0ibSAxMjMsMTQwIGMgLTIxLDAgLTM5LDE3IC00MCwzOCB2IDE5MiBjIDEsMjEgMTksMzggNDAsMzggMjEsMCAzOSwtMTcgNDAsLTM4IFYgMTc4IGMgLTEsLTIxIC0xOSwtMzggLTQwLC0zOCB6IgogICAgICAgZmlsbD0iIzFFNUFBOCIKICAgICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7ZmlsbC1vcGFjaXR5OjEiIC8+CiAgICA8cGF0aAogICAgICAgaWQ9IlJpZ2h0IgogICAgICAgZD0ibSAzNDksMjg1IHYgODUgYyAxLDIxIDE5LDM4IDQwLDM4IDIxLDAgMzksLTE3IDQwLC0zOCBWIDE4MiBjIC0xMSwtMTQgLTc0LDYzIC04MCwxMDMgeiIKICAgICAgIGZpbGw9IiMwMEFGQUUiCiAgICAgICBzdHlsZT0iZmlsbDojZmZmZmZmO2ZpbGwtb3BhY2l0eToxIiAvPgogICAgPHBhdGgKICAgICAgIGlkPSJNaWRkbGUiCiAgICAgICBkPSJtIDEyNywxMDggYyAtMzQsMCAtNDQsMjUgLTQ0LDQwIHYgNTQgYyAzMCwtMzMgNzUsMjcgODAsMzMgMjgsMzIgNDQsODcgOTMsODkgNDgsLTIgNjcsLTU2IDkzLC04OSAwLDAgNDUsLTc0IDgwLC04MCAwLC0yOCAtMTEsLTQ3IC00NCwtNDcgLTM0LDAgLTU4LDUwIC03NSw3MiAtMTcsMjIgLTI1LDQ2IC01NCw0NiAtMjksMCAtMzgsLTI1IC01NCwtNDYgLTE3LC0yMiAtNDEsLTcyIC03NSwtNzIgeiIKICAgICAgIGZpbGw9InVybCgjbGluZWFyR3JhZGllbnQyKSIKICAgICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7ZmlsbC1vcGFjaXR5OjEiIC8+CiAgPC9nPgo8L3N2Zz4K&style=for-the-badge)](https://morphe.software) [![Subreddit badge](https://img.shields.io/badge/Reddit-gray?style=for-the-badge&logo=reddit&logoColor=white)](https://www.reddit.com/r/MorpheApp) [![Crowdin badge](https://img.shields.io/badge/Translations-gray?style=for-the-badge&logo=crowdin)](https://morphe.software/translate)
-<br>
-</div> 
+Supporting Google authentication and Play Games companion for the game modules. The default package is `app.revanced.android.gms`, with account type `app.revanced`. Stable LSPatch 1.2 build 487 is the supported host baseline.
 
-&nbsp;
-<p align="center">
-  <a href="https://morphe.software" title="Download Morphe">
-    <img src="https://raw.githubusercontent.com/MorpheApp/.github/refs/heads/main/profile/assets/download-morphe.svg" alt="Download Morphe" width="240"/>
-  </a>
-</p>
-&nbsp;
+Build with JDK 17 or 21, the pinned Gradle wrapper and Android SDK:
 
-# ⚙️ MicroG RE (GmsCore Redesign)
-
-microG Services is a FLOSS (Free/Libre Open Source Software) framework to allow applications designed for Google Play Services to run on systems, where Play Services is not available.
-
-### Download variants
-
-Six variants are offered:
-
-- `microg-version.apk` — Universal
-- `microg-version-noicon.apk` — Universal, icon hidden
-- `microg-version-icon-arm64-v8a.apk` — ARM64
-- `microg-version-icon-armeabi-v7a.apk` — ARMv7 (32-bit)
-- `microg-version-noicon-arm64-v8a.apk` — ARM64, icon hidden
-- `microg-version-noicon-armeabi-v7a.apk` — ARMv7 (32-bit), icon hidden
-
-`-noicon` is identical in features and behavior except the MicroG icon is hidden in the device launcher.
-The app can be opened from the app info found in the device system app list.
-
-`arm64-v8a` contains only ARM64 native libraries. The app is less than half the size of the regular release.
-Most modern phones can use this release.
-
-`armeabi-v7a` contains only 32-bit ARM native libraries and is for devices using a 32-bit Android userspace, including some devices with ARM64-capable CPUs.
-
-If you are unsure which variant to use, download the universal APK (`microg-version.apk`).
-
-<details>
-<summary>APK signature</summary>
-
-```
-app.revanced.android.gms
-0B:6C:95:15:AF:B1:95:FA:C5:96:01:69:6B:A0:A7:90:7A:0B:21:7C:CF:72:0B:43:14:84:27:CC:F6:43:43:E7
+```sh
+./gradlew :play-services-core:assembleDefaultDebug :play-services-core:assembleDefaultRelease -Pabi=arm64-v8a
+python3 -m unittest discover -s tests -v
 ```
 
-Package name and SHA-256 fingerprint of the signing certificate, for example for AppVerifier or Obtainium.
+Local distributable builds use `/Users/jordan/.android/signing/jordan-modules.json` and `/Users/jordan/.android/signing/jordan-modules.p12`. Alias: `jordan-modules`. The PKCS12 identity uses RSA 4096 / SHA256withRSA and expires on 2036-11-25. Certificate SHA-256: `5486b776291d98b9bc5a70586b9af89afce8674fd462889238c0ebd99786a1c1`. Private material stays outside Git. CI uses the same identity through `TEMPLATE_*` secrets and the `TEMPLATE_CERT_SHA256` repository variable. Signing rechecks the live key even when Gradle reuses its configuration cache.
 
-</details>
+The release workflow supports universal, ARM64 and ARMv7 APKs, with a visible or hidden launcher icon. `-Pabi=arm64-v8a` selects ARM64; `-PnoIcon=true` hides the launcher icon. APK manifest metadata records the source commit and whether the checkout was dirty.
 
-LSPatch Games/Identity integration and the assisted-sign-in layout fix are described
-in [LSPATCH_COMPAT.md](LSPATCH_COMPAT.md).
+See [host authentication contracts](LSPATCH_COMPAT.md) and [Play Games integration](ROGUE_COMPAT.md). On Android 14 and newer, enable **Sign in with Google via MicroG RE** in the system credential-provider settings. Self-Check links to that setting.
 
-## Translations
+Native 16 KB support is incomplete: the bundled Conscrypt and Cronet libraries still require 4 KB ELF segments. Their upstream published artifacts do not provide an aligned replacement. The other ARM64 libraries have compatible LOAD segments. Android may run the companion in page-size compatibility mode; ZIP alignment alone cannot establish native compatibility.
 
-If you'd like to help translate MicroG please see [here](https://morphe.software/translate).
-
-
-License
--------
-    Copyright 2013-2025 microG Project Team
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+This fork builds on the [microG project](https://github.com/microg/GmsCore) and the MicroG RE redesign. Source licenses and attribution remain with their files. The project is distributed under [Apache License 2.0](LICENSE).

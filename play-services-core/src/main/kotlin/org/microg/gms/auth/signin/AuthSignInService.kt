@@ -101,7 +101,7 @@ class AuthSignInServiceImpl(
                         if (googleSignInAccount != null) {
                             sendResult(googleSignInAccount, Status(CommonStatusCodes.SUCCESS))
                         } else {
-                            sendResult(null, Status(CommonStatusCodes.DEVELOPER_ERROR))
+                            sendResult(null, Status.INTERNAL_ERROR)
                         }
                     } else {
                         sendResult(null, Status(CommonStatusCodes.SIGN_IN_REQUIRED))
@@ -110,8 +110,8 @@ class AuthSignInServiceImpl(
                     sendResult(null, Status(CommonStatusCodes.SIGN_IN_REQUIRED))
                 }
             } catch (e: Exception) {
-                Log.w(TAG, e)
-                sendResult(null, Status.INTERNAL_ERROR)
+                Log.w(TAG, "Sign-in failed: ${e.javaClass.simpleName}")
+                sendResult(null, signInFailureStatus(e))
             }
         }
     }

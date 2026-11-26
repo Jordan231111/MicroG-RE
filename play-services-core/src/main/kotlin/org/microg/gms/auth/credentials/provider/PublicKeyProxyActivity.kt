@@ -36,7 +36,7 @@ class PublicKeyProxyActivity : CredentialProviderActivity() {
     override fun onProviderGetCredentialRequest(request: ProviderGetCredentialRequest) {
         val option = request.credentialOptions.firstOrNull() as? GetPublicKeyCredentialOption ?: throw IllegalArgumentException()
 
-        Log.d(TAG, "get request json: ${option.requestJson}")
+        Log.d(TAG, "Passkey get requested")
 
         val isBrowserRequest = request.callingAppInfo.origin.isHttpsUrl()
 
@@ -67,7 +67,7 @@ class PublicKeyProxyActivity : CredentialProviderActivity() {
 
         val options = JSONObject(publicKeyRequest.requestJson).parsePublicKeyCredentialCreationOptions()
 
-        Log.d(TAG, "handlePasskeyCreate: options: $options")
+        Log.d(TAG, "Passkey create requested")
 
         val (optionsBytes, source) = buildCreationOptions(options, isBrowserRequest, origin, publicKeyRequest.clientDataHash)
         val fidoIntent = buildFidoAuthenticateIntent(source, optionsBytes, callingPackage, TYPE_REGISTER)
@@ -116,12 +116,12 @@ class PublicKeyProxyActivity : CredentialProviderActivity() {
         when (val response = publicKeyCredential.response) {
             is AuthenticatorAttestationResponse -> {
                 val responseJson = publicKeyCredential.toJson()
-                Log.d(TAG, "Passkey created successfully: $responseJson")
+                Log.d(TAG, "Passkey created successfully")
                 finishWithSuccess(CreatePublicKeyCredentialResponse(responseJson))
             }
             is AuthenticatorAssertionResponse -> {
                 val responseJson = publicKeyCredential.toJson()
-                Log.d(TAG, "Passkey authentication successful: $responseJson")
+                Log.d(TAG, "Passkey authentication successful")
                 finishWithSuccess(GetCredentialResponse(androidx.credentials.PublicKeyCredential(responseJson)))
             }
             else -> {

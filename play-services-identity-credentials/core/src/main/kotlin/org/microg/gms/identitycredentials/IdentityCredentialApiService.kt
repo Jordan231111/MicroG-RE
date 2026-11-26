@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import org.microg.gms.BaseService
 import org.microg.gms.common.AccountUtils
 import org.microg.gms.common.GmsService
+import org.microg.gms.common.PackageUtils
 import org.microg.gms.fido.core.Database
 import org.microg.gms.profile.Build
 import org.microg.gms.profile.ProfileManager
@@ -83,13 +84,15 @@ private val FEATURES = arrayOf(
 class IdentityCredentialApiService : BaseService(TAG, GmsService.IDENTITY_CREDENTIALS) {
 
     override fun handleServiceRequest(callback: IGmsCallbacks, request: GetServiceRequest, service: GmsService) {
-        Log.d(TAG, "handleServiceRequest pkg=${request.packageName}")
+        val callingPackage = PackageUtils.getAndCheckCallingPackageWithoutSpoofing(this, request.packageName)
+            ?: throw SecurityException("Missing caller package")
+        Log.d(TAG, "handleServiceRequest pkg=$callingPackage")
         val connectionInfo = ConnectionInfo()
         connectionInfo.features = FEATURES
         ProfileManager.ensureInitialized(this)
         callback.onPostInitCompleteWithConnectionInfo(
             ConnectionResult.SUCCESS,
-            IdentityCredentialApiServiceImpl(this, request.packageName, lifecycle).asBinder(),
+            IdentityCredentialApiServiceImpl(this, callingPackage, lifecycle).asBinder(),
             connectionInfo
         )
     }

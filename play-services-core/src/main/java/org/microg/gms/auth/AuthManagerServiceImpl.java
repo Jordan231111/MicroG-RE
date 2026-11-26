@@ -129,7 +129,7 @@ public class AuthManagerServiceImpl extends IAuthManagerService.Stub {
         scope = Objects.equals(AuthConstants.SCOPE_OAUTH2, scope) ? AuthConstants.SCOPE_EM_OP_PRO : scope;
 
         if (!AuthConstants.SCOPE_GET_ACCOUNT_ID.equals(scope))
-            Log.d(TAG, "getToken: account:" + account.name + " scope:" + scope + " extras:" + extras + ", notify: " + notify);
+            Log.d(TAG, "getToken requested, notify=" + notify);
 
         scope = Objects.equals(AuthConstants.SCOPE_OAUTH2, scope) ? AuthConstants.SCOPE_EM_OP_PRO : scope;
 
@@ -155,7 +155,7 @@ public class AuthManagerServiceImpl extends IAuthManagerService.Stub {
             AuthResponse res = authManager.requestAuthWithBackgroundResolution(false);
             if (res.auth != null) {
                 if (!AuthConstants.SCOPE_GET_ACCOUNT_ID.equals(scope))
-                    Log.d(TAG, "getToken: " + res);
+                    Log.d(TAG, "getToken: credential issued");
                 result.putString(KEY_AUTHTOKEN, res.auth);
                 Bundle details = new Bundle();
                 details.putParcelable("TokenData", new TokenData(res.auth, res.expiry, scope.startsWith("oauth2:"), getScopes(res.grantedScopes != null ? res.grantedScopes : scope)));
@@ -221,7 +221,7 @@ public class AuthManagerServiceImpl extends IAuthManagerService.Stub {
 
     @Override
     public Bundle removeAccount(Account account) {
-        Log.w(TAG, "Not implemented: removeAccount(" + account + ")");
+        Log.w(TAG, "Not implemented: removeAccount");
         return null;
     }
 
@@ -249,7 +249,7 @@ public class AuthManagerServiceImpl extends IAuthManagerService.Stub {
     public int hasCapabilities(HasCapabilitiesRequest request) throws RemoteException {
         PackageUtils.assertGooglePackagePermission(context, GooglePackagePermission.ACCOUNT);
         int result = new HasCapabilitiesHandler(context).handle(request);
-        Log.d(TAG, "hasCapabilities(" + request.account + ", " + Arrays.toString(request.capabilities) + ") = " + result);
+        Log.d(TAG, "hasCapabilities result=" + result);
         return result;
     }
 
@@ -266,7 +266,7 @@ public class AuthManagerServiceImpl extends IAuthManagerService.Stub {
         if (packageName == null) packageName = extras.getString(KEY_CLIENT_PACKAGE_NAME);
         packageName = PackageUtils.getAndCheckCallingPackage(context, packageName, extras.getInt(KEY_CALLER_UID, 0), extras.getInt(KEY_CALLER_PID, 0));
 
-        Log.d(TAG, "clearToken: token:" + token + " extras:" + extras);
+        Log.d(TAG, "clearToken requested");
         AccountManager.get(context).invalidateAuthToken(AuthConstants.DEFAULT_ACCOUNT_TYPE, token);
 
         Bundle res = new Bundle();

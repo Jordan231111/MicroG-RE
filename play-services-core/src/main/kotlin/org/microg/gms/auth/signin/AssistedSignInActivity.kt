@@ -5,6 +5,8 @@
 
 package org.microg.gms.auth.signin
 
+import android.app.Activity.RESULT_CANCELED
+import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -20,6 +22,7 @@ import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
 import com.google.android.gms.common.internal.safeparcel.SafeParcelableSerializer
 import org.microg.gms.auth.AuthConstants
+import org.microg.gms.auth.credentials.unsupportedGoogleIdOptions
 import org.microg.gms.common.Constants
 import com.google.android.gms.BuildConfig;
 
@@ -31,6 +34,13 @@ const val GOOGLE_SIGN_IN_OPTIONS = "google_sign_in_options"
 
 private const val TAG = "AssistedSignInActivity"
 private const val REQUEST_CODE_SIGN_IN = 120
+
+internal fun signInActivityResultStatus(resultCode: Int, status: Status?, hasAccount: Boolean): Status = when {
+    status != null && !status.isSuccess -> status
+    resultCode == RESULT_CANCELED -> Status.CANCELED
+    resultCode != RESULT_OK || !hasAccount -> Status.INTERNAL_ERROR
+    else -> Status.SUCCESS
+}
 
 class AssistedSignInActivity : AppCompatActivity() {
 
@@ -75,9 +85,18 @@ class AssistedSignInActivity : AppCompatActivity() {
         )
         if (googleSignInOptions == null) return errorResult(Status(CommonStatusCodes.ERROR, "request params invalid."))
 
+        // Parsing an option is not support for its server-side contract. Reject
+        // unsupported policies before consent or a token request, on either transport.
+        val unsupported = signInIntentRequest?.let {
+            unsupportedGoogleIdOptions(it.hostedDomainFilter, null, null, it.requestVerifiedPhoneNumber())
+        } ?: beginSignInRequest?.googleIdTokenRequestOptions?.let {
+            unsupportedGoogleIdOptions(null, it.linkedServiceId, it.idTokenDepositionScopes, it.requestVerifiedPhoneNumber())
+        }
+        if (unsupported != null) return errorResult(Status(CommonStatusCodes.DEVELOPER_ERROR, unsupported))
+
         if (signInIntentRequest != null) {
             Log.d(TAG, "signInIntentRequest start")
-            prepareSignIn()
+            if (savedInstanceState == null) prepareSignIn()
             return
         }
 
@@ -86,7 +105,7 @@ class AssistedSignInActivity : AppCompatActivity() {
             val fragment = supportFragmentManager.findFragmentByTag(AssistedSignInFragment.TAG)
             if (fragment != null) {
                 val assistedSignInFragment = fragment as AssistedSignInFragment
-                assistedSignInFragment.cancelLogin(true)
+                if (savedInstanceState == null) assistedSignInFragment.cancelLogin(true)
             } else {
                 AssistedSignInFragment.newInstance(clientPackageName!!, googleSignInOptions!!, beginSignInRequest!!)
                     .show(supportFragmentManager, AssistedSignInFragment.TAG)
@@ -116,8 +135,9 @@ class AssistedSignInActivity : AppCompatActivity() {
     }
 
     fun loginResult(googleSignInAccount: GoogleSignInAccount?) {
-        if (googleSignInAccount == null) {
-            errorResult(Status(CommonStatusCodes.CANCELED, "User cancelled."))
+        if (googleSignInAccount == null || googleSignInAccount.email.isNullOrBlank()
+            || googleSignInAccount.idToken.isNullOrBlank()) {
+            errorResult(Status.INTERNAL_ERROR)
             return
         }
         val credential = SignInCredential(
@@ -140,9 +160,12 @@ class AssistedSignInActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_CODE_SIGN_IN) {
-            val googleSignInAccount =
-                data?.getParcelableExtra<GoogleSignInAccount>(AuthConstants.GOOGLE_SIGN_IN_ACCOUNT)
-            loginResult(googleSignInAccount)
+            runCatching {
+                val account = data?.getParcelableExtra<GoogleSignInAccount>(AuthConstants.GOOGLE_SIGN_IN_ACCOUNT)
+                val status = signInActivityResultStatus(resultCode,
+                    data?.getParcelableExtra(AuthConstants.GOOGLE_SIGN_IN_STATUS), account != null)
+                if (status.isSuccess) loginResult(account) else errorResult(status)
+            }.onFailure { errorResult(Status.INTERNAL_ERROR) }
         } else {
             super.onActivityResult(requestCode, resultCode, data)
         }

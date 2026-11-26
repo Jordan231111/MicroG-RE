@@ -97,7 +97,7 @@ class AppCertManager(private val context: Context) {
                         versionInfo = DeviceKeyRequest.VersionInfo(Build.VERSION.SDK_INT, BuildConfig.VERSION_CODE),
                         token = token
                 )
-                Log.d(TAG, "Request: ${request.toString().chunked(128).joinToString("\n")}")
+                Log.d(TAG, "Device-key registration requested")
                 val deferredResponse = CompletableDeferred<ByteArray?>()
                 queue.add(object : Request<ByteArray?>(Method.POST, "https://android.googleapis.com/auth/devicekey", null) {
                     override fun getBody(): ByteArray = request.encode()
@@ -114,9 +114,9 @@ class AppCertManager(private val context: Context) {
 
                     override fun deliverError(error: VolleyError) {
                         if (error.networkResponse != null) {
-                            Log.d(TAG, "Error: ${Base64.encodeToString(error.networkResponse.data, 2)}")
+                            Log.d(TAG, "Device-key registration failed: HTTP ${error.networkResponse.statusCode}")
                         } else {
-                            Log.d(TAG, "Error: ${error.message}")
+                            Log.d(TAG, "Device-key registration failed: ${error.javaClass.simpleName}")
                         }
                         deviceKeyCacheTime = 0
                         deferredResponse.complete(null)

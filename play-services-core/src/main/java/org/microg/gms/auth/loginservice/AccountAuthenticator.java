@@ -79,7 +79,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public Bundle confirmCredentials(AccountAuthenticatorResponse response, Account account, Bundle options) throws NetworkErrorException {
-        Log.d(TAG, "confirmCredentials: " + account + ", " + options);
+        Log.d(TAG, "confirmCredentials requested");
         final Bundle result = new Bundle();
         result.putBoolean(AccountManager.KEY_BOOLEAN_RESULT, true);
         return result;
@@ -108,7 +108,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
     @Override
     public Bundle getAuthToken(AccountAuthenticatorResponse response, Account account, String authTokenType, Bundle options) throws NetworkErrorException {
         options.keySet();
-        Log.d(TAG, "getAuthToken: " + account + ", " + authTokenType + ", " + options);
+        Log.d(TAG, "getAuthToken requested");
         String app = options.getString(KEY_ANDROID_PACKAGE_NAME);
         app = PackageUtils.getAndCheckPackageWithoutSpoofing(context, app, options.getInt(KEY_CALLER_UID), options.getInt(KEY_CALLER_PID));
         AuthManager authManager;
@@ -151,7 +151,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
         try {
             AuthResponse res = requestAuthForAccountManager(authManager, account, true);
             if (res.auth != null) {
-                Log.d(TAG, "getAuthToken: " + res.auth);
+                Log.d(TAG, "getAuthToken: credential issued");
                 Bundle result = new Bundle();
                 result.putString(KEY_ACCOUNT_TYPE, account.type);
                 result.putString(KEY_ACCOUNT_NAME, account.name);
@@ -179,7 +179,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
                 return result;
             }
         } catch (ReauthenticationRequiredException e) {
-            Log.w(TAG, "Re-authentication required for account " + account.name, e);
+            Log.w(TAG, "Re-authentication required");
             return createReAuthIntentResult(response, account, options);
         } catch (Exception e) {
             Log.w(TAG, e);
@@ -237,7 +237,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public Bundle hasFeatures(AccountAuthenticatorResponse response, Account account, String[] features) throws NetworkErrorException {
-        Log.d(TAG, "hasFeatures: " + account + ", " + Arrays.toString(features));
+        Log.d(TAG, "hasFeatures requested");
         AccountManager accountManager = AccountManager.get(context);
         String services = accountManager.getUserData(account, "services");
         boolean res = true;
@@ -262,7 +262,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public Bundle updateCredentials(AccountAuthenticatorResponse response, Account account, String authTokenType, Bundle options) throws NetworkErrorException {
-        Log.d(TAG, "updateCredentials: " + account + ", " + authTokenType + ", " + options);
+        Log.d(TAG, "updateCredentials requested");
         return null;
     }
 }

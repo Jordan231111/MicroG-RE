@@ -45,17 +45,17 @@ class CredentialsService : BaseService(TAG, GmsService.AUTH_CREDENTIALS) {
 
 class CredentialsServiceImpl(private val packageName: String) : ICredentialsService.Stub() {
     override fun request(callbacks: ICredentialsCallbacks, request: CredentialRequest) {
-        Log.d(TAG, "request($request)")
+        Log.d(TAG, "Credential request")
         callbacks.onStatus(Status.CANCELED)
     }
 
     override fun save(callbacks: ICredentialsCallbacks, request: SaveRequest) {
-        Log.d(TAG, "save($request)")
+        Log.d(TAG, "Credential save requested")
         callbacks.onStatus(Status.CANCELED)
     }
 
     override fun delete(callbacks: ICredentialsCallbacks, request: DeleteRequest) {
-        Log.d(TAG, "delete($request)")
+        Log.d(TAG, "Credential delete requested")
         callbacks.onStatus(Status.CANCELED)
     }
 
@@ -65,7 +65,7 @@ class CredentialsServiceImpl(private val packageName: String) : ICredentialsServ
     }
 
     override fun generatePassword(callbacks: ICredentialsCallbacks, request: GeneratePasswordRequest) {
-        Log.d(TAG, "generatePassword($request)")
+        Log.d(TAG, "Password generation requested")
         callbacks.onStatus(Status.SUCCESS)
     }
 

@@ -31,6 +31,7 @@ import com.google.android.gms.R
 import org.microg.gms.auth.AuthConstants
 import org.microg.gms.base.core.BuildConfig
 import java.util.UUID
+import org.microg.gms.auth.credentials.provider.GoogleIdRequestParams.Companion.toGoogleIdRequestParams
 
 private const val TAG = "GoogleIdService"
 
@@ -53,10 +54,10 @@ open class GoogleIdService : CredentialProviderService() {
                 it.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL || it.type == TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL
             }
             val entries = if (options.isEmpty()) emptyList() else {
-                val accounts = AccountManager.get(this).getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)
+                val accounts = AccountManager.get(this).getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE).map { it.name }
                 options.flatMap { option ->
-                    if (accounts.isEmpty()) listOf(createCredentialEntry(option, null))
-                    else accounts.map { createCredentialEntry(option, it.name) }
+                    option.candidateQueryData.toGoogleIdRequestParams().candidateAccounts(accounts)
+                        .map { createCredentialEntry(option, it) }
                 }
             }
             BeginGetCredentialResponse.Builder().setCredentialEntries(entries).build()
@@ -117,6 +118,7 @@ const val GOOGLE_ID_TYPE_SIWG = "com.google.android.libraries.identity.googleid.
 const val GOOGLE_ID_SERVER_CLIENT_ID = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_SERVER_CLIENT_ID"
 const val GOOGLE_ID_NONCE = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_NONCE"
 const val GOOGLE_ID_LINKED_SERVICE_ID = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_LINKED_SERVICE_ID"
+const val GOOGLE_ID_DEPOSITION_SCOPES = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_ID_TOKEN_DEPOSITION_SCOPES"
 const val GOOGLE_ID_AUTO_SELECT = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_AUTO_SELECT_ENABLED"
 const val GOOGLE_ID_SIWG_AUTO_SELECT = "com.google.android.libraries.identity.googleid.siwg.BUNDLE_KEY_AUTO_SELECT_ENABLED"
 const val GOOGLE_ID_REQUEST_VERIFIED_PHONE = "com.google.android.libraries.identity.googleid.BUNDLE_KEY_REQUEST_VERIFIED_PHONE_NUMBER"
@@ -146,8 +148,19 @@ data class GoogleIdRequestParams(
     val isAutoSelectAllowed: Boolean = false,
     val filterByAuthorized: Boolean = false,
     val linkedServiceId: String?,
-    val requestVerifiedPhoneNumber: Boolean = false
+    val requestVerifiedPhoneNumber: Boolean = false,
+    val idTokenDepositionScopes: List<String>? = null
 ) {
+    fun candidateAccounts(accounts: List<String>): List<String?> {
+        if (!isSignInWithGoogle && filterByAuthorized) {
+            // Candidate requests can omit the caller and complete OAuth parameters.
+            // Defer authorization filtering to the final authenticated request instead
+            // of pinning a chooser row to an account whose grant is still unknown.
+            return if (accounts.isEmpty()) emptyList() else listOf(null)
+        }
+        return if (accounts.isEmpty()) listOf(null) else accounts
+    }
+
     companion object {
         fun Bundle.toGoogleIdRequestParams(): GoogleIdRequestParams {
             val isSignInWithGoogle = getString(GOOGLE_ID_SUBTYPE) == GOOGLE_ID_TYPE_SIWG
@@ -160,7 +173,8 @@ data class GoogleIdRequestParams(
                     getBoolean(GOOGLE_ID_ANDROIDX_AUTO_SELECT, false)),
                 filterByAuthorized = getBoolean(GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS, true),
                 linkedServiceId = getString(GOOGLE_ID_LINKED_SERVICE_ID),
-                requestVerifiedPhoneNumber = getBoolean(GOOGLE_ID_REQUEST_VERIFIED_PHONE, false)
+                requestVerifiedPhoneNumber = getBoolean(GOOGLE_ID_REQUEST_VERIFIED_PHONE, false),
+                idTokenDepositionScopes = getStringArrayList(GOOGLE_ID_DEPOSITION_SCOPES)
             )
         }
     }

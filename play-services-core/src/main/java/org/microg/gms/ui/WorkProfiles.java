@@ -40,7 +40,7 @@ public class WorkProfiles {
      * profile has to be checked and not only its existence.
      */
     public static boolean hasManagedWorkProfile(Context context) {
-        UserManager userManager = context.getSystemService(UserManager.class);
+        UserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);
         if (userManager == null) return false;
 
         UserHandle self = Process.myUserHandle();

@@ -49,6 +49,7 @@ import org.microg.gms.auth.signin.checkAccountAuthStatus
 import org.microg.gms.auth.signin.getOAuthManager
 import org.microg.gms.auth.signin.getServerAuthTokenManager
 import org.microg.gms.auth.signin.performSignIn
+import org.microg.gms.auth.signin.signInFailureStatus
 import org.microg.gms.auth.signin.scopeUris
 import org.microg.gms.common.AccountUtils
 import org.microg.gms.common.Constants
@@ -83,7 +84,7 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
     }
 
     override fun authorize(callback: IAuthorizationCallback?, request: AuthorizationRequest?) {
-        Log.d(TAG, "authorize called, packageName=$packageName request=$request")
+        Log.d(TAG, "authorize called, packageName=$packageName")
         lifecycleScope.launchWhenStarted {
             try {
                 val result = performAuthorize(request)
@@ -93,8 +94,9 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
                 Log.w(TAG, "authorize: invalid account", e)
                 runCatching { callback?.onAuthorized(Status(CommonStatusCodes.INVALID_ACCOUNT), null) }
             } catch (e: Exception) {
-                Log.w(TAG, "authorize failed, falling back to PendingIntent", e)
-                runCatching { callback?.onAuthorized(Status.SUCCESS, buildPendingIntentResult(request)) }
+                val status = signInFailureStatus(e)
+                Log.w(TAG, "authorize failed: ${e.javaClass.simpleName}")
+                runCatching { callback?.onAuthorized(status, null) }
             }
         }
     }
@@ -115,7 +117,7 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
 
         val hostedDomain = request.hostedDomainFilter
         if (!hostedDomain.isNullOrEmpty() && !account.name.lowercase(Locale.ROOT).endsWith("@${hostedDomain.lowercase(Locale.ROOT)}")) {
-            throw InvalidAccountException("account ${account.name} does not match hostedDomainFilter=$hostedDomain")
+            throw InvalidAccountException("Account does not match the hosted-domain policy")
         }
 
         val crossAccount = requestAccount != null && account.name != requestAccount.name
@@ -186,7 +188,7 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
     }
 
     override fun verifyWithGoogle(callback: IVerifyWithGoogleCallback?, request: VerifyWithGoogleRequest?) {
-        Log.d(TAG, "verifyWithGoogle called, request=$request")
+        Log.d(TAG, "verifyWithGoogle called")
         lifecycleScope.launchWhenStarted {
             val result = runCatching { performVerify(request) }.onFailure { Log.w(TAG, "verifyWithGoogle failed", it) }.getOrNull()
             val status = if (result != null) Status.SUCCESS else Status.CANCELED
@@ -222,10 +224,13 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
     }
 
     override fun revokeAccess(callback: IStatusCallback?, request: RevokeAccessRequest?) {
-        Log.d(TAG, "revokeAccess called, request=$request")
+        Log.d(TAG, "revokeAccess called")
         lifecycleScope.launchWhenStarted {
-            runCatching { performRevoke(request) }.onFailure { Log.w(TAG, "revokeAccess failed", it) }
-            runCatching { callback?.onResult(Status.SUCCESS) }
+            val status = runCatching { performRevoke(request) }.fold({ Status.SUCCESS }, {
+                Log.w(TAG, "revokeAccess failed: ${it.javaClass.simpleName}")
+                signInFailureStatus(it)
+            })
+            runCatching { callback?.onResult(status) }
         }
     }
 
@@ -234,19 +239,29 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
             ?: AccountUtils.get(context).getSelectedAccount(packageName)
             ?: SignInConfigurationService.getDefaultAccount(context, packageName)
 
+        var remoteFailure: Exception? = null
         if (account != null) {
             val authOptions = SignInConfigurationService.getAuthOptions(context, packageName)
             for (options in authOptions) {
                 val authManager = getOAuthManager(context, packageName, options, account)
-                val token = authManager.peekAuthToken() ?: continue
-                runCatching { revokeTokenRemotely(token) }.onFailure { Log.w(TAG, "remote revoke failed (continuing local invalidate)", it) }
-                authManager.invalidateAuthToken(token)
+                val token = authManager.peekAuthToken()
+                if (token != null) {
+                    try {
+                        revokeTokenRemotely(token)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        remoteFailure = e
+                    }
+                    authManager.invalidateAuthToken(token)
+                }
                 authManager.isPermitted = false
             }
         }
 
         AccountUtils.get(context).removeSelectedAccount(packageName)
         SignInConfigurationService.setAuthInfo(context, packageName, null, null)
+        remoteFailure?.let { throw it }
     }
 
     private suspend fun revokeTokenRemotely(token: String) {
@@ -255,19 +270,23 @@ class AuthorizationServiceImpl(val context: Context, val packageName: String, ov
             val request = Request.Builder().url(REVOKE_ENDPOINT).post(body).build()
             httpClient.newCall(request).execute().use { response ->
                 Log.d(TAG, "revoke endpoint status=${response.code}")
+                if (!response.isSuccessful) throw java.io.IOException("Token revocation failed: HTTP ${response.code}")
             }
         }
     }
 
     override fun clearToken(callback: IStatusCallback?, request: ClearTokenRequest?) {
-        Log.d(TAG, "clearToken called, request=$request")
+        Log.d(TAG, "clearToken called")
         lifecycleScope.launchWhenStarted {
-            runCatching {
+            val status = runCatching {
                 request?.token?.takeIf { it.isNotEmpty() }?.let {
                     AccountManager.get(context).invalidateAuthToken(AuthConstants.DEFAULT_ACCOUNT_TYPE, it)
                 }
-            }.onFailure { Log.w(TAG, "clearToken failed", it) }
-            runCatching { callback?.onResult(Status.SUCCESS) }
+            }.fold({ Status.SUCCESS }, {
+                Log.w(TAG, "clearToken failed: ${it.javaClass.simpleName}")
+                signInFailureStatus(it)
+            })
+            runCatching { callback?.onResult(status) }
         }
     }
 

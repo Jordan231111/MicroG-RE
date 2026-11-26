@@ -8,24 +8,19 @@ package org.microg.gms.auth.credentials.provider
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
+import org.microg.gms.auth.credentials.createSignInIntent
+import org.microg.gms.auth.credentials.googleIdResultException
+import org.microg.gms.auth.credentials.unsupportedGoogleIdOptions
+import org.microg.gms.auth.credentials.toGoogleIdCredentialData
 import androidx.annotation.RequiresApi
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialResponse
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.NoCredentialException
 import androidx.credentials.provider.ProviderCreateCredentialRequest
 import androidx.credentials.provider.ProviderGetCredentialRequest
-import com.google.android.gms.auth.api.identity.GetSignInIntentRequest
-import com.google.android.gms.auth.api.identity.BeginSignInRequest
 import com.google.android.gms.auth.api.identity.SignInCredential
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.CommonStatusCodes
-import com.google.android.gms.common.api.Status
 import com.google.android.gms.common.internal.safeparcel.SafeParcelableSerializer
 import org.microg.gms.auth.AuthConstants
-import org.microg.gms.auth.credentials.buildAssistedSignInIntent
-import org.microg.gms.auth.signin.GET_SIGN_IN_INTENT_REQUEST
-import org.microg.gms.auth.signin.BEGIN_SIGN_IN_REQUEST
 import org.microg.gms.auth.credentials.provider.GoogleIdRequestParams.Companion.toGoogleIdRequestParams
 
 private const val TAG = "SignInProxyActivity"
@@ -35,47 +30,44 @@ private const val REQUEST_CODE_SIGN_IN = 100
 class SignInProxyActivity : CredentialProviderActivity() {
 
     private var credentialType = TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+    private var signInLaunched = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        credentialType = savedInstanceState?.getString("google-id-credential-type") ?: TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        signInLaunched = savedInstanceState?.getBoolean("google-id-sign-in-launched") == true
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("google-id-credential-type", credentialType)
+        outState.putBoolean("google-id-sign-in-launched", signInLaunched)
+        super.onSaveInstanceState(outState)
+    }
 
     override fun onProviderGetCredentialRequest(request: ProviderGetCredentialRequest) {
         val option = request.credentialOptions.singleOrNull {
             it.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL || it.type == TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL
         } ?: return finishWithException("Expected one selected Google ID credential option")
         credentialType = option.type
+        // Android restores the child result after recreation. Starting consent again would
+        // create a second request and could deliver a response to the wrong attempt.
+        if (signInLaunched) return
+        // No delegated web-origin flow is implemented. Never authenticate the browser
+        // package as though it were the requested relying party.
+        if (runCatching { request.callingAppInfo.getOrigin("{\"apps\":[]}") }.isFailure) {
+            return finishWithException("Delegated credential origins are not supported",
+                getExceptionCreator = ::GetCredentialUnsupportedException)
+        }
         // The final platform request supplies the verified caller and full request data.
         // Candidate-query data may omit the caller and is insufficient for authentication.
         val params = option.requestData.toGoogleIdRequestParams()
-        val serverClientId = params.serverClientId?.takeIf { it.isNotBlank() }
-            ?: return finishWithException("Missing Google ID server client ID")
-        val signInRequest = if (params.isSignInWithGoogle) {
-            GetSignInIntentRequest.builder()
-                .setServerClientId(serverClientId)
-                .filterByHostedDomain(params.hostedDomainFilter)
-                .setNonce(params.nonce)
-                .build()
-        } else {
-            BeginSignInRequest.Builder()
-                .setGoogleIdTokenRequestOptions(
-                    BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
-                        .setSupported(true)
-                        .setServerClientId(serverClientId)
-                        .setFilterByAuthorizedAccounts(params.filterByAuthorized)
-                        .apply { params.nonce?.let { setNonce(it) } }
-                        .build()
-                )
-                .setAutoSelectEnabled(params.isAutoSelectAllowed)
-                .build()
+        unsupportedGoogleIdOptions(params.hostedDomainFilter, params.linkedServiceId,
+            params.idTokenDepositionScopes, params.requestVerifiedPhoneNumber)?.let {
+            return finishWithException(it, getExceptionCreator = ::GetCredentialUnsupportedException)
         }
-        val googleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestIdToken(serverClientId)
-            .apply { intent.getStringExtra(GOOGLE_ID_SIWG_ACCOUNT_NAME)?.let { setAccountName(it) } }
-            .build()
-        val signInIntent = buildAssistedSignInIntent(
-            requestExtraKey = if (params.isSignInWithGoogle) GET_SIGN_IN_INTENT_REQUEST else BEGIN_SIGN_IN_REQUEST,
-            serializedRequest = SafeParcelableSerializer.serializeToBytes(signInRequest),
-            googleSignInOptions = googleSignInOptions,
-            callingPackage = request.callingAppInfo.packageName
-        )
+        val signInIntent = params.createSignInIntent(packageName, request.callingAppInfo.packageName,
+            intent.getStringExtra(GOOGLE_ID_SIWG_ACCOUNT_NAME))
+        signInLaunched = true
         startActivityForResult(signInIntent, REQUEST_CODE_SIGN_IN)
     }
 
@@ -86,26 +78,11 @@ class SignInProxyActivity : CredentialProviderActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_CODE_SIGN_IN) return
-        if (resultCode != RESULT_OK) {
-            val status = try {
-                data?.getByteArrayExtra(AuthConstants.STATUS)?.let {
-                    SafeParcelableSerializer.deserializeFromBytes(it, Status.CREATOR).statusCode
-                }
-            } catch (e: RuntimeException) {
-                return finishWithException("Invalid sign-in result")
-            }
-            when {
-                status == CommonStatusCodes.SIGN_IN_REQUIRED ->
-                    finishWithException("No eligible Google account", getExceptionCreator = ::NoCredentialException)
-                resultCode == RESULT_CANCELED && (status == null || status == CommonStatusCodes.CANCELED) ->
-                    finishWithException("Sign in canceled", getExceptionCreator = ::GetCredentialCancellationException)
-                else -> finishWithException("Sign-in activity failed")
-            }
-            return
+        googleIdResultException(resultCode, data)?.let { error ->
+            return finishWithException(error.message?.toString(), getExceptionCreator = { error })
         }
-        if (data == null) return finishWithException("Missing Google ID credential")
         Log.d(TAG, "onActivityResult - requestCode: $requestCode, resultCode: $resultCode")
-        handleSignInSuccess(data)
+        handleSignInSuccess(requireNotNull(data))
     }
 
     private fun handleSignInSuccess(data: Intent) = runCatching {
@@ -122,18 +99,7 @@ class SignInProxyActivity : CredentialProviderActivity() {
             SignInCredential.CREATOR
         )
 
-        val idToken = signInCredential.googleIdToken
-        require(signInCredential.id.isNotBlank() && !idToken.isNullOrBlank()) { "Incomplete Google ID credential" }
-        val credentialData = Bundle().apply {
-            putString(GOOGLE_ID_BUNDLE_KEY_ID, signInCredential.id)
-            putString(GOOGLE_ID_BUNDLE_KEY_ID_TOKEN, idToken)
-            putString(GOOGLE_ID_BUNDLE_KEY_DISPLAY_NAME, signInCredential.displayName)
-            putString(GOOGLE_ID_BUNDLE_KEY_GIVEN_NAME, signInCredential.givenName)
-            putString(GOOGLE_ID_BUNDLE_KEY_FAMILY_NAME, signInCredential.familyName)
-            putString(GOOGLE_ID_BUNDLE_KEY_PHONE_NUMBER, signInCredential.phoneNumber)
-            putParcelable(GOOGLE_ID_BUNDLE_KEY_PROFILE_PICTURE_URI, signInCredential.profilePictureUri)
-        }
-
+        val credentialData = signInCredential.toGoogleIdCredentialData()
         finishWithSuccess(GetCredentialResponse(CustomCredential(credentialType, credentialData)))
     }.onFailure { e ->
         Log.e(TAG, "Error processing sign-in result", e)

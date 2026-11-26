@@ -255,7 +255,7 @@ public abstract class AbstractGmsServiceBroker extends IGmsServiceBroker.Stub {
         if ((supportedServices.contains(gmsService)) || supportedServices.contains(GmsService.ANY)) {
             handleServiceRequest(callback, request, gmsService);
         } else {
-            Log.d(TAG, "Service not supported: " + request);
+            Log.d(TAG, "Service not supported: " + request.serviceId);
             throw new IllegalArgumentException("Service not supported: " + request.serviceId);
         }
     }

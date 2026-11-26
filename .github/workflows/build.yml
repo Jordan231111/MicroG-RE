@@ -1,8 +1,11 @@
 name: "Gradle build"
-permissions: {}
+permissions:
+  contents: read
 on:
-  - pull_request
-  - workflow_dispatch
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -40,9 +43,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
 
       - name: "Setup matchers"
         run: |
@@ -62,15 +62,22 @@ jobs:
             fi
           done
 
+      - name: Load shared Android signing identity
+        if: github.event_name != 'pull_request'
+        env:
+          TEMPLATE_KS_BASE64: ${{ secrets.TEMPLATE_KS_BASE64 }}
+          TEMPLATE_KS_PASS: ${{ secrets.TEMPLATE_KS_PASS }}
+          TEMPLATE_KEY_ALIAS: ${{ secrets.TEMPLATE_KEY_ALIAS }}
+          TEMPLATE_KEY_PASS: ${{ secrets.TEMPLATE_KEY_PASS }}
+          TEMPLATE_CERT_SHA256: ${{ vars.TEMPLATE_CERT_SHA256 }}
+        run: python3 tools/setup_shared_signing.py
+
       - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
+        run: "./gradlew ${{ github.event_name == 'pull_request' && '-Ptemplate.localTestSigning=true' || '' }} assemble${{ matrix.target }}"
 
       - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+        run: "./gradlew ${{ github.event_name == 'pull_request' && '-Ptemplate.localTestSigning=true' || '' }} lint${{ matrix.target }}"
 
-#      - name: "Upload APK artifacts"
-#        uses: actions/upload-artifact@v7
-#        with:
-#          name: microg-apks-${{ matrix.target }}
-#          path: "play-services-core/build/outputs/apk/*/*/*.apk"
-#          if-no-files-found: error
+      - name: Remove staged signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/shared-android-signing.p12"

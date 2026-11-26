@@ -82,7 +82,7 @@ public class AccountContentProvider extends ContentProvider {
                     if (SDK_INT >= 26 && accounts != null && arg.equals(DEFAULT_ACCOUNT_TYPE)) {
                         for (Account account : accounts) {
                             if (am.getAccountVisibility(account, packageName) == VISIBILITY_UNDEFINED) {
-                                Log.d(TAG, "Make account " + account + " visible to " + packageName);
+                                Log.d(TAG, "Make account visible to " + packageName);
                                 am.setAccountVisibility(account, packageName, VISIBILITY_VISIBLE);
                             }
                         }

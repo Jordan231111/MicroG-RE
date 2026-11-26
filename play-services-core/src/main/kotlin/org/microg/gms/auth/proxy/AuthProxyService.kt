@@ -44,7 +44,7 @@ class AuthProxyService : BaseService(TAG, GmsService.AUTH_PROXY) {
 
 class AuthServiceImpl(private val context: Context, override val lifecycle: Lifecycle, private val packageName: String) : IAuthService.Stub(), LifecycleOwner {
     override fun performProxyRequest(callbacks: IAuthCallbacks, request: ProxyRequest) {
-        Log.d(TAG, "performProxyRequest($packageName, $request)")
+        Log.d(TAG, "performProxyRequest($packageName)")
         lifecycleScope.launchWhenStarted {
             callbacks.onProxyResponse(ProxyResponse().apply { gmsStatusCode = CommonStatusCodes.CANCELED })
         }

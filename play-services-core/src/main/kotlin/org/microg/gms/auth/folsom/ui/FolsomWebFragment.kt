@@ -204,7 +204,7 @@ private class FolsomJsBridge(
 
     @JavascriptInterface
     fun setVaultSharedKeys(accountId: String, keysJson: String) {
-        Log.d("FolsomJsBridge", "setVaultSharedKeys called: accountId=$accountId, keysJson=${keysJson.take(200)}")
+        Log.d("FolsomJsBridge", "setVaultSharedKeys called")
         runCatching {
             JSONObject(keysJson).let { json ->
                 json.keys().forEach { domain ->
@@ -228,7 +228,7 @@ private class FolsomJsBridge(
 
     @JavascriptInterface
     fun setConsent(accountId: String, domain: String, consent: Boolean) {
-        Log.d("FolsomJsBridge", "setConsent called: accountId=$accountId, domain=$domain, consent=$consent")
+        Log.d("FolsomJsBridge", "setConsent called")
         collectedConsent[domain] = consent
         notifyWebView(0)
     }

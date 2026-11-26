@@ -8,6 +8,7 @@ package org.microg.gms.auth.credentials.identity
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
@@ -41,6 +42,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.microg.gms.BaseService
 import org.microg.gms.auth.signin.ACTION_ASSISTED_SIGN_IN
+import org.microg.gms.auth.signin.AssistedSignInActivity
 import org.microg.gms.auth.signin.BEGIN_SIGN_IN_REQUEST
 import org.microg.gms.auth.signin.GET_SIGN_IN_INTENT_REQUEST
 import org.microg.gms.auth.credentials.FEATURES
@@ -50,22 +52,26 @@ import org.microg.gms.auth.signin.SignInConfigurationService
 import org.microg.gms.auth.signin.performSignOut
 import org.microg.gms.common.AccountUtils
 import org.microg.gms.common.GmsService
+import org.microg.gms.common.PackageUtils
 import org.microg.gms.fido.core.Database
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.KEY_OPTIONS
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.KEY_SERVICE
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.KEY_SOURCE
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.KEY_TYPE
+import java.util.UUID
 
 private const val TAG = "IdentitySignInService"
 
 class IdentitySignInService : BaseService(TAG, GmsService.AUTH_API_IDENTITY_SIGNIN) {
 
     override fun handleServiceRequest(callback: IGmsCallbacks, request: GetServiceRequest, service: GmsService) {
+        val callingPackage = PackageUtils.getAndCheckCallingPackageWithoutSpoofing(this, request.packageName)
+            ?: throw SecurityException("Missing caller package")
         Log.d(TAG, "handleServiceRequest start ")
         val connectionInfo = ConnectionInfo()
         connectionInfo.features = FEATURES
         callback.onPostInitCompleteWithConnectionInfo(
-            ConnectionResult.SUCCESS, IdentitySignInServiceImpl(this, request.packageName, lifecycle).asBinder(), connectionInfo
+            ConnectionResult.SUCCESS, IdentitySignInServiceImpl(this, callingPackage, lifecycle).asBinder(), connectionInfo
         )
     }
 }
@@ -77,7 +83,7 @@ class IdentitySignInServiceImpl(private val context: Context, private val client
 
     override fun beginSignIn(callback: IBeginSignInCallback, request: BeginSignInRequest) {
         Log.d(TAG, "method 'beginSignIn' called")
-        Log.d(TAG, "request-> $request")
+        Log.d(TAG, "Sign-in requested")
         if (request.googleIdTokenRequestOptions.isSupported) {
             if (request.googleIdTokenRequestOptions.serverClientId.isNullOrEmpty()) {
                 Log.d(TAG, "serverClientId is empty, return CANCELED ")
@@ -152,7 +158,7 @@ class IdentitySignInServiceImpl(private val context: Context, private val client
         callback: IGetSignInIntentCallback, request: GetSignInIntentRequest
     ) {
         Log.d(TAG, "method 'getSignInIntent' called")
-        Log.d(TAG, "request-> $request")
+        Log.d(TAG, "Sign-in requested")
         if (request.serverClientId.isNullOrEmpty()) {
             Log.d(TAG, "serverClientId is empty, return CANCELED ")
             callback.onResult(Status.CANCELED, null)
@@ -180,20 +186,24 @@ class IdentitySignInServiceImpl(private val context: Context, private val client
     }
 
     private fun performGoogleSignIn(bundle: Bundle): PendingIntent {
-        val intent = Intent(ACTION_ASSISTED_SIGN_IN).apply {
-            `package` = context.packageName
+        val intent = Intent(context, AssistedSignInActivity::class.java).apply {
+            action = ACTION_ASSISTED_SIGN_IN
             putExtras(bundle)
         }
-        val flags = PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_UPDATE_CURRENT
-        return PendingIntentCompat.getActivity(context, 0, intent, flags, false)!!
+        return requestPendingIntent(intent)
     }
 
     private fun performFidoSignIn(bundle: Bundle): PendingIntent {
         val intent = Intent(context, IdentityFidoProxyActivity::class.java).apply {
             putExtras(bundle)
         }
-        val flags = PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_UPDATE_CURRENT
-        return PendingIntentCompat.getActivity(context, 0, intent, flags, false)!!
+        return requestPendingIntent(intent)
     }
 
+    private fun requestPendingIntent(intent: Intent): PendingIntent {
+        // Extras do not participate in PendingIntent identity. Concurrent requests,
+        // including requests from different clients, must retain their own nonce/options.
+        intent.data = Uri.fromParts("microg-auth-request", UUID.randomUUID().toString(), null)
+        return PendingIntentCompat.getActivity(context, 0, intent, PendingIntent.FLAG_ONE_SHOT, false)!!
+    }
 }

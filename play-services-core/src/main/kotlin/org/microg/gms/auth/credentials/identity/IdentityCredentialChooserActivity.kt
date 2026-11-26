@@ -9,6 +9,12 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
+import org.microg.gms.auth.credentials.createSignInIntent
+import org.microg.gms.auth.credentials.googleIdResultException
+import org.microg.gms.auth.credentials.unsupportedGoogleIdOptions
+import org.microg.gms.auth.credentials.toGoogleIdCredentialData
+import org.microg.gms.auth.credentials.provider.GoogleIdRequestParams.Companion.toGoogleIdRequestParams
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.os.BundleCompat
 import androidx.credentials.PasswordCredential
@@ -18,9 +24,7 @@ import androidx.credentials.exceptions.CreateCredentialUnknownException
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialUnknownException
 import androidx.credentials.exceptions.NoCredentialException
-import com.google.android.gms.auth.api.identity.BeginSignInRequest
 import com.google.android.gms.auth.api.identity.SignInCredential
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.internal.safeparcel.SafeParcelableSerializer
 import com.google.android.gms.fido.Fido.FIDO2_KEY_CREDENTIAL_EXTRA
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorErrorResponse
@@ -29,29 +33,15 @@ import com.google.android.gms.identitycredentials.CredentialOption
 import com.google.android.gms.identitycredentials.GetCredentialRequest
 import org.json.JSONObject
 import org.microg.gms.auth.AuthConstants
-import org.microg.gms.auth.credentials.buildAssistedSignInIntent
 import org.microg.gms.auth.credentials.buildFidoAuthenticateIntent
 import org.microg.gms.identitycredentials.EXTRA_CALLING_PACKAGE
 import org.microg.gms.identitycredentials.EXTRA_CREATE_REQUEST
 import org.microg.gms.identitycredentials.EXTRA_GET_REQUEST
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_ANDROIDX_AUTO_SELECT
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_BUNDLE_KEY_DISPLAY_NAME
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_BUNDLE_KEY_FAMILY_NAME
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_BUNDLE_KEY_GIVEN_NAME
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_BUNDLE_KEY_ID
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_BUNDLE_KEY_ID_TOKEN
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_BUNDLE_KEY_PROFILE_PICTURE_URI
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_NONCE
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_SERVER_CLIENT_ID
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_SIWG_NONCE
-import org.microg.gms.auth.credentials.provider.GOOGLE_ID_SIWG_SERVER_CLIENT_ID
 import org.microg.gms.auth.credentials.provider.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
 import org.microg.gms.auth.credentials.provider.TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL
 import org.microg.gms.auth.credentials.provider.parsePublicKeyCredentialCreationOptions
 import org.microg.gms.auth.credentials.provider.parsePublicKeyCredentialRequestOptions
 import org.microg.gms.auth.credentials.provider.toJson
-import org.microg.gms.auth.signin.BEGIN_SIGN_IN_REQUEST
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.SOURCE_APP
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.TYPE_REGISTER
 import org.microg.gms.fido.core.ui.AuthenticatorActivity.Companion.TYPE_SIGN
@@ -63,10 +53,16 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
     private var callingPackage: String = ""
     private var isCreatePath = false
     private var googleCredentialType = TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+    private var childLaunched = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         callingPackage = intent.getStringExtra(EXTRA_CALLING_PACKAGE).orEmpty()
+        childLaunched = savedInstanceState?.getBoolean("credential-child-launched") == true
+        isCreatePath = savedInstanceState?.getBoolean("credential-create-path") == true
+        googleCredentialType = savedInstanceState?.getString("google-credential-type") ?: TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        // The restored child delivers its result to this instance; do not launch a second consent flow.
+        if (childLaunched) return
         runCatching {
             val getReq: GetCredentialRequest? = readNestedParcelable(EXTRA_GET_REQUEST, GetCredentialRequest::class.java)
             val createReq: CreateCredentialRequest? = readNestedParcelable(EXTRA_CREATE_REQUEST, CreateCredentialRequest::class.java)
@@ -91,8 +87,10 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
     }
 
     private fun routeGet(req: GetCredentialRequest) {
-        val option = req.credentialOptions.firstOrNull()
-            ?: return finishWithGetException(NoCredentialException("No credential options requested"))
+        if (req.origin != null) return finishWithGetException(
+            GetCredentialUnsupportedException("Delegated credential origins are not supported"))
+        val option = req.credentialOptions.singleOrNull()
+            ?: return finishWithGetException(GetCredentialUnsupportedException("Expected one credential option"))
         when (option.type) {
             PublicKeyCredential.TYPE_PUBLIC_KEY_CREDENTIAL -> startPasskeyGet(option)
             TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, TYPE_MICROG_GOOGLE_ID_TOKEN_CREDENTIAL -> {
@@ -124,7 +122,7 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
             return finishWithGetException(GetCredentialUnknownException("Invalid passkey requestJson"))
         }
         val fidoIntent = buildFidoAuthenticateIntent(SOURCE_APP, pkOptions.serializeToBytes(), callingPackage, TYPE_SIGN)
-        startActivityForResult(fidoIntent, REQ_CODE_FIDO)
+        launchChild(fidoIntent, REQ_CODE_FIDO)
     }
 
     private fun startPasskeyCreate(req: CreateCredentialRequest) {
@@ -139,43 +137,28 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
             return finishWithCreateException(CreateCredentialUnknownException("Invalid passkey requestJson"))
         }
         val fidoIntent = buildFidoAuthenticateIntent(SOURCE_APP, pkOptions.serializeToBytes(), callingPackage, TYPE_REGISTER)
-        startActivityForResult(fidoIntent, REQ_CODE_FIDO)
+        launchChild(fidoIntent, REQ_CODE_FIDO)
     }
 
     private fun startGoogleSignIn(option: CredentialOption) {
-        val data = option.credentialRetrievalData ?: Bundle()
-        val serverClientId = (data.getString(GOOGLE_ID_SERVER_CLIENT_ID) ?: data.getString(GOOGLE_ID_SIWG_SERVER_CLIENT_ID)).orEmpty()
-        if (serverClientId.isBlank()) {
-            return finishWithGetException(NoCredentialException("GoogleIdToken option missing serverClientId"))
+        val params = (option.credentialRetrievalData ?: Bundle()).toGoogleIdRequestParams()
+        unsupportedGoogleIdOptions(params.hostedDomainFilter, params.linkedServiceId,
+            params.idTokenDepositionScopes, params.requestVerifiedPhoneNumber)?.let {
+            return finishWithGetException(GetCredentialUnsupportedException(it))
         }
-        val nonce = data.getString(GOOGLE_ID_NONCE) ?: data.getString(GOOGLE_ID_SIWG_NONCE)
-        val filterByAuthorized = data.getBoolean(GOOGLE_ID_FILTER_BY_AUTHORIZED_ACCOUNTS, false)
-        val autoSelect = data.getBoolean(GOOGLE_ID_ANDROIDX_AUTO_SELECT, false)
+        launchChild(params.createSignInIntent(packageName, callingPackage), REQ_CODE_SIGN_IN)
+    }
 
-        val signInRequest = BeginSignInRequest.Builder()
-            .setGoogleIdTokenRequestOptions(
-                BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
-                    .setSupported(true)
-                    .setServerClientId(serverClientId)
-                    .setFilterByAuthorizedAccounts(filterByAuthorized)
-                    .apply { nonce?.let { setNonce(it) } }
-                    .build()
-            )
-            .setAutoSelectEnabled(autoSelect)
-            .build()
+    private fun launchChild(child: Intent, requestCode: Int) {
+        startActivityForResult(child, requestCode)
+        childLaunched = true
+    }
 
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestIdToken(serverClientId)
-            .build()
-
-        val signInIntent = buildAssistedSignInIntent(
-            requestExtraKey = BEGIN_SIGN_IN_REQUEST,
-            serializedRequest = SafeParcelableSerializer.serializeToBytes(signInRequest),
-            googleSignInOptions = gso,
-            callingPackage = callingPackage
-        )
-        startActivityForResult(signInIntent, REQ_CODE_SIGN_IN)
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("credential-child-launched", childLaunched)
+        outState.putBoolean("credential-create-path", isCreatePath)
+        outState.putString("google-credential-type", googleCredentialType)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -215,24 +198,12 @@ class IdentityCredentialChooserActivity : AppCompatActivity() {
     }
 
     private fun handleSignInResult(resultCode: Int, data: Intent?) {
-        if (resultCode != RESULT_OK || data == null) {
-            return finishWithGetException(GetCredentialCancellationException("Sign-in canceled"))
-        }
+        googleIdResultException(resultCode, data)?.let { return finishWithGetException(it) }
         runCatching {
-            val bytes = data.getByteArrayExtra(AuthConstants.SIGN_IN_CREDENTIAL)
+            val bytes = requireNotNull(data).getByteArrayExtra(AuthConstants.SIGN_IN_CREDENTIAL)
                 ?: throw IllegalStateException("Sign-in result missing credential")
             val credential = SafeParcelableSerializer.deserializeFromBytes(bytes, SignInCredential.CREATOR)
-            val idToken = credential.googleIdToken
-            require(credential.id.isNotBlank() && !idToken.isNullOrBlank()) { "Incomplete Google ID credential" }
-            val credData = Bundle().apply {
-                putString(GOOGLE_ID_BUNDLE_KEY_ID, credential.id)
-                putString(GOOGLE_ID_BUNDLE_KEY_ID_TOKEN, idToken)
-                credential.displayName?.let { putString(GOOGLE_ID_BUNDLE_KEY_DISPLAY_NAME, it) }
-                credential.givenName?.let { putString(GOOGLE_ID_BUNDLE_KEY_GIVEN_NAME, it) }
-                credential.familyName?.let { putString(GOOGLE_ID_BUNDLE_KEY_FAMILY_NAME, it) }
-                credential.profilePictureUri?.let { putString(GOOGLE_ID_BUNDLE_KEY_PROFILE_PICTURE_URI, it.toString()) }
-            }
-            finishWithCredential(googleCredentialType, credData)
+            finishWithCredential(googleCredentialType, credential.toGoogleIdCredentialData())
         }.onFailure { e ->
             Log.e(TAG, "handleSignInResult failed", e)
             finishWithGetException(GetCredentialUnknownException(e.message ?: "Sign-in result error"))

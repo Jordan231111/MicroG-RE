@@ -197,7 +197,7 @@ public class AuthManager {
     }
 
     public String peekAuthToken() {
-        Log.d(TAG, "peekAuthToken: " + buildTokenKey());
+        Log.d(TAG, "peekAuthToken requested");
         return getAccountManager().peekAuthToken(getAccount(), buildTokenKey());
     }
 

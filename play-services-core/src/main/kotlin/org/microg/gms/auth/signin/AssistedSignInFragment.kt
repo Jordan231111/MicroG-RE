@@ -50,6 +50,7 @@ import org.microg.gms.utils.getApplicationLabel
 internal class SignInAccountChoices(statuses: Map<String, Boolean?>, authorizedOnly: Boolean) {
     val accounts = if (authorizedOnly) statuses.filterValues { it == true } else statuses
     val onlySelectable = accounts.entries.singleOrNull { it.value != null }
+    val hasFailedChecks = statuses.values.any { it == null }
 }
 
 class AssistedSignInFragment : BottomSheetDialogFragment() {
@@ -160,7 +161,8 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
         val single = choices.onlySelectable
         when {
             single != null -> autoSingleSignIn(single.key, single.value == true)
-            authStatusList.isEmpty() -> errorResult(Status(CommonStatusCodes.SIGN_IN_REQUIRED))
+            authStatusList.isEmpty() -> errorResult(if (choices.hasFailedChecks) Status.INTERNAL_ERROR
+                else Status(CommonStatusCodes.SIGN_IN_REQUIRED))
             else -> prepareMultiSignIn(authStatusList)
         }
     }
@@ -229,7 +231,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
                 }
             }
             container?.addView(loadingView)
-            startLogin(accountName)
+            startLogin(accountName, allowAutoSelectCancellation = cancelBlock != null)
         }
     }
 
@@ -331,14 +333,14 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun startLogin(accountName: String) {
+    private fun startLogin(accountName: String, allowAutoSelectCancellation: Boolean) {
         if (loginJob?.isActive == true) return
         loginJob = lifecycleScope.launch {
             val account = accounts.find { it.name == accountName }
                 ?: return@launch errorResult(Status(CommonStatusCodes.SIGN_IN_REQUIRED))
             lastChooseAccount = account
             isSigningIn = true
-            delay(3000)
+            if (allowAutoSelectCancellation) delay(3000)
             try {
                 val (_, googleSignInAccount) = withContext(Dispatchers.IO) {
                     performSignIn(requireContext(), clientPackageName, options, account, true, beginSignInRequest.googleIdTokenRequestOptions.nonce)
@@ -348,7 +350,7 @@ class AssistedSignInFragment : BottomSheetDialogFragment() {
                 throw e
             } catch (e: Exception) {
                 Log.d(TAG, "Sign-in failed: ${e.javaClass.simpleName}")
-                errorResult()
+                errorResult(signInFailureStatus(e))
             }
         }
     }

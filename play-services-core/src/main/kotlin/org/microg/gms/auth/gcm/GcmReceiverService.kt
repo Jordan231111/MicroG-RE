@@ -101,7 +101,7 @@ class GcmReceiverService : ReceiverService(TAG) {
 
     override fun receiver(intent: Intent) {
         Log.d(TAG, "receiver: run thread -> ${Thread.currentThread().name}")
-        Log.d(TAG, "receiver: action: ${intent.action} data: ${intent.extras}")
+        Log.d(TAG, "Authentication notification received")
         val accountManager = getSystemService(ACCOUNT_SERVICE) as AccountManager? ?: return run { Log.w(TAG, "receiver: accountManager is null") }
         val data = intent.extras ?: return run { Log.w(TAG, "receiver: intent.extras is null") }
         if (intent.action == ACTION_GCM_NOTIFY_COMPLETE) {
@@ -113,24 +113,24 @@ class GcmReceiverService : ReceiverService(TAG) {
                 val notificationData = it.second
                 updateNotificationReadState(accountManager, accountName, notificationData, NOTIFICATION_STATUS_COMPLETE)
                 NotificationManagerCompat.from(this).cancel(notificationId)
-                Log.d(TAG, "Notification with $accountName updateNotificationReadState <$notificationId> to Completed.")
+                Log.d(TAG, "Notification marked completed")
             }
             accountNotificationMap.remove(accountName)
             return
         }
-        Log.d(TAG, "notifyVerificationInfo: from: ${data.getString(GcmConstants.EXTRA_FROM)} data: $data")
+        Log.d(TAG, "Verification notification received")
         val gcmBodyType = data.getString(GcmConstants.EXTRA_GCM_BODY) ?: return run { Log.w(TAG, "receiver: EXTRA_GCM_BODY is null!") }
         if (GMS_GCM_NOTIFICATIONS != gcmBodyType) return run { Log.w(TAG, "receiver: gcmBodyType is not notifications") }
         val payloadData = data.getString(GcmConstants.EXTRA_GMS_GNOTS_PAYLOAD) ?: return run { Log.w(TAG, "receiver: payloadData is null!") }
         val notificationData = NotificationData.ADAPTER.decode(Base64.decode(payloadData, DEFAULT_FLAGS))
-        Log.w(TAG, "notifyVerificationInfo: $notificationData")
+        Log.w(TAG, "Verification notification parsed")
         if (notificationData.isActive == true) return run { Log.w(TAG, "receiver: notification isActive!") }
         val account = notificationData.userInfo?.userId?.let { id ->
             accountManager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE).find {
                 accountManager.getUserData(it, AuthConstants.GOOGLE_USER_ID) == id
             }
         } ?: return run { Log.w(TAG, "receiver: account not matched!") }
-        Log.d(TAG, "notifyVerificationInfo: account: ${account.name}")
+        Log.d(TAG, "Verification account resolved")
         val identifierResponse = runBlocking {
             repeat(NOTIFICATION_REPEAT_NUM) { attempt ->
                 try {
@@ -146,10 +146,10 @@ class GcmReceiverService : ReceiverService(TAG) {
             }
             return@runBlocking null
         }
-        Log.d(TAG, "notifyVerificationInfo: identifierResponse: $identifierResponse")
+        Log.d(TAG, "Verification identifiers resolved")
         val notifications = identifierResponse?.notifications?.notificationDataList ?: return run { Log.w(TAG, "receiver: notifications is null!") }
         notifications.forEachIndexed { index, it ->
-            Log.d(TAG, "notifyVerificationInfo: notifications: index:$index it: $it")
+            Log.d(TAG, "Verification notification index=$index")
             updateNotificationReadState(accountManager, account.name, it, NOTIFICATION_STATUS_READY)
             sendNotification(account, notificationIdGenerator.incrementAndGet(), it)
             updateNotificationReadState(accountManager, account.name, it, NOTIFICATION_STATUS_COMPLETE)
@@ -257,7 +257,7 @@ class GcmReceiverService : ReceiverService(TAG) {
                 }
             }
             sendNotificationReadState(accountManager, accountName, ReadStateList.Builder().apply { items = readStateList }.build())
-            Log.i(TAG, "Notification read state updated successfully for account: $accountName")
+            Log.i(TAG, "Notification read state updated successfully")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to update the notification(s) read state.", e)
         }

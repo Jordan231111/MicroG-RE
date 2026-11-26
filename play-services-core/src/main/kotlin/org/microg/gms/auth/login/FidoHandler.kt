@@ -71,7 +71,7 @@ class FidoHandler(private val activity: LoginActivity) : TransportHandlerCallbac
     }
 
     private fun sendSuccessResult(response: AuthenticatorResponse, transport: Transport) {
-        Log.d(TAG, "Finish with success response: $response")
+        Log.d(TAG, "Passkey response ready")
         if (response is AuthenticatorAssertionResponse) {
             sendResult(JSONObject().apply {
                 val base64Flags = Base64.NO_PADDING + Base64.NO_WRAP + Base64.URL_SAFE
@@ -124,7 +124,7 @@ class FidoHandler(private val activity: LoginActivity) : TransportHandlerCallbac
                 }
                 requestObject.getIntOrNull("requestId")?.let { setRequestId(it) }
             }.build()
-            Log.d(TAG, "sign: $requestOptions")
+            Log.d(TAG, "Passkey sign requested")
             sendSelectView("multiple_transports", JSONObject().apply {
                 put("transports", JSONArray(availableTransports))
             })
@@ -136,7 +136,7 @@ class FidoHandler(private val activity: LoginActivity) : TransportHandlerCallbac
     fun onEvent(event: String) {
         try {
             val eventObject = JSONObject(event)
-            Log.d(TAG, "event: $eventObject")
+            Log.d(TAG, "Passkey event received")
             when (eventObject.getString("type")) {
                 "user_selected_view_for_transport" -> {
                     val transport = when (eventObject.getJSONObject("data").getString("transport")) {

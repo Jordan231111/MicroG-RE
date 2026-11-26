@@ -51,7 +51,7 @@ public abstract class BaseService extends LifecycleService {
                 } catch (Exception e) {
                     // Sometimes we need to define the correct ClassLoader before unparcel(). Ignore those.
                 }
-                Log.d(TAG, "bound by: " + request);
+                Log.d(TAG, "bound: service=" + service + ", package=" + request.packageName);
                 BaseService.this.handleServiceRequest(callback, request, service);
             }
         };

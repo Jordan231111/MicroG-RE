@@ -68,7 +68,7 @@ object AppUpdater {
     /** Intent extra used by the update notification to force the update prompt. */
     const val EXTRA_CHECK_UPDATE = "extra_check_update"
 
-    private const val RELEASES_URL = "https://api.github.com/repos/MorpheApp/MicroG-RE/releases"
+    private const val RELEASES_URL = "https://api.github.com/repos/Jordan231111/MicroG-RE/releases"
     private const val UPDATE_URL = "$RELEASES_URL/latest"
     private const val PREFS_NAME = "org.microg.gms_updater"
     private const val PREFS_IGNORED_VERSION = "ignored_version"
@@ -246,8 +246,8 @@ object AppUpdater {
             val isArm64 = Build.SUPPORTED_ABIS.any { it == "arm64-v8a" }
             val assetFileName = if (isArm64) "microg-$cleanVersion-noicon-arm64-v8a.apk" else "microg-$cleanVersion-noicon.apk"
 
-            val directUrlTag = "https://github.com/MorpheApp/MicroG-RE/releases/download/$tag/$assetFileName"
-            val directUrlLatest = "https://github.com/MorpheApp/MicroG-RE/releases/latest/download/$assetFileName"
+            val directUrlTag = "https://github.com/Jordan231111/MicroG-RE/releases/download/$tag/$assetFileName"
+            val directUrlLatest = "https://github.com/Jordan231111/MicroG-RE/releases/latest/download/$assetFileName"
 
             if (!candidateUrls.contains(directUrlTag)) candidateUrls.add(directUrlTag)
             if (!candidateUrls.contains(directUrlLatest)) candidateUrls.add(directUrlLatest)
@@ -310,13 +310,13 @@ object AppUpdater {
             .setContentIntent(pending)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-        context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, builder.build())
+        ContextCompat.getSystemService(context, NotificationManager::class.java)?.notify(NOTIFICATION_ID, builder.build())
     }
 
     /** Dismisses the "update available" notification (e.g. when the user ignores the update). */
     @JvmStatic
     fun dismissUpdateNotification(context: Context) {
-        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        ContextCompat.getSystemService(context, NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
     }
 
     /** True when [update] is newer than the installed version. */
@@ -1165,8 +1165,8 @@ object AppUpdater {
             val tag = "v$cleanVersion"
             val fileName = directFileNameBuilder(cleanVersion, preferNoicon)
             listOf(
-                "https://github.com/MorpheApp/MicroG-RE/releases/download/$tag/$fileName",
-                "https://github.com/MorpheApp/MicroG-RE/releases/latest/download/$fileName"
+                "https://github.com/Jordan231111/MicroG-RE/releases/download/$tag/$fileName",
+                "https://github.com/Jordan231111/MicroG-RE/releases/latest/download/$fileName"
             ).forEach { if (!candidateUrls.contains(it)) candidateUrls.add(it) }
 
             val targetFile = File(activity.cacheDir, "$DOWNLOAD_DIR/microg-re-abi-update.apk")

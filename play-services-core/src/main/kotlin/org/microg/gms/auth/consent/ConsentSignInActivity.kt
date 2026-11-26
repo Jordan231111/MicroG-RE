@@ -138,7 +138,7 @@ class ConsentSignInActivity : Activity() {
 
     private fun sendReplay(result: String?) {
         try {
-            Log.d(TAG, "sendReplay result -> $result")
+            Log.d(TAG, "Consent response ready")
             val obtain = Message.obtain()
             obtain.data = bundleOf(Pair(CONSENT_RESULT, result))
             messenger?.send(obtain)
@@ -190,7 +190,7 @@ class ConsentSignInActivity : Activity() {
 
         @JavascriptInterface
         fun setConsentResult(result: String) {
-            Log.d(TAG, "consent success: sendReplay  -> $result")
+            Log.d(TAG, "Consent completed")
             if ("CAA" != result) {
                 sendReplay(result)
             }
